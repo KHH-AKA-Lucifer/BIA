@@ -4,9 +4,12 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Mapped, mapped_column 
 from sqlalchemy import Boolean, DateTime, Integer, String 
 
+# user table 
+# written with python ORM 
 class User(Base):
+    # table name 
     __tablename__ = "users"
-
+    # table columns
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
