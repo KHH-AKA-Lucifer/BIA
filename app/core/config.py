@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # configuration for the secrets 
     model_config = SettingsConfigDict(
-        env_file = ".env",
+        env_file = "app/.env",
         env_file_encoding="utf-8",
         case_sensitive=True
     )
