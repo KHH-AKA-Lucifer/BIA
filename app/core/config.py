@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     # basic info
     APP_NAME: str = "Data Dashboard Backend"
     APP_ENV: str = "development"
-    # DEBUG: bool = True
+    # git aDEBUG: bool = True
     API_V1_STR: str = "/api/v1"
     # postgreSQL
     POSTGRES_HOST: str = "localhost"
