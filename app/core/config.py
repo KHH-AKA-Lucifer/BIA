@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     # postgreSQL
     POSTGRES_HOST: str = "localhost"
-    POSTGRES_PORT: int = 5432
+    POSTGRES_PORT: int = 5440
     POSTGRES_DB: str = "datadashboard"
     POSTGRES_USER: str 
     POSTGRES_PASSWORD: str 
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # configuration for the secrets 
     model_config = SettingsConfigDict(
-        env_file = "app/.env",
+        env_file = ".env",
         env_file_encoding="utf-8",
         case_sensitive=True
     )
