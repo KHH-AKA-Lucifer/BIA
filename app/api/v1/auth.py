@@ -2,10 +2,10 @@
 from app.models.user import User
 from sqlalchemy.orm import Session
 from app.db.sessions import get_db
-from app.api.deps import get_current_active_user
 from app.core.security import create_access_token
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi import APIRouter, Depends, HTTPException, status 
+from app.api.deps import get_current_active_user, require_roles
 from app.schemas.auth import TokenResponse, UserLogin, UserRegister, UserResponse
 from app.services.auth_service import authenticate_user, create_user, get_user_by_email
 
@@ -59,4 +59,10 @@ def login(
 
 @router.get("/me", response_model=UserResponse)
 def read_me(current_user: User = Depends(get_current_active_user)) -> UserResponse:
+    return current_user
+
+@router.get("/admin", response_model=UserResponse)
+def admin_only(
+    current_user: User = Depends(require_roles("admin")),
+) -> UserResponse:
     return current_user
