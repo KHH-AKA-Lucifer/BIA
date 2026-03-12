@@ -48,6 +48,7 @@ class TokenResponse(BaseModel):
     None
     """
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
 
 class UserResponse(BaseModel):
@@ -72,3 +73,18 @@ class UserResponse(BaseModel):
     model_config = {
         "from_attributes": True
     }
+
+class ChangePasswordRequest(BaseModel):
+    """
+    Function for changing password. 
+
+    params
+    ------
+    BaseModel: object inheritance. 
+
+    returns
+    -------
+    None
+    """
+    current_password: str
+    new_password: str 
