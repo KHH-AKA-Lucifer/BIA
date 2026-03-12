@@ -65,6 +65,7 @@ class UserResponse(BaseModel):
     #   response schema
     id: int
     email:  EmailStr
+    role: str 
     is_active: bool
     is_superuser: bool
     # config for extracting data from ORM objects
