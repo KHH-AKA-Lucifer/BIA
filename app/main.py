@@ -7,6 +7,7 @@ from fastapi import FastAPI, Depends
 from app.core.config import settings
 from contextlib import asynccontextmanager
 from app.core.logging import setup_logging
+from app.api.v1.auth import router as auth_router
 
 setup_logging()
 logger = logging.getLogger("app")
@@ -17,7 +18,6 @@ async def lifespan(app: FastAPI):
     logger.info("Starting application...")
     logger.info("App name: %s", settings.APP_NAME)
     logger.info("Environment: %s", settings.APP_ENV)
-    logger.info("Database URL -> %s", settings.database_url)
     # logger.info("Debug mode: %s", settings.DEBUG)
     # the app stays active whie serving requests
     yield
@@ -29,6 +29,8 @@ app = FastAPI(
     #debug=settings.DEBUG, # security reason
     lifespan=lifespan
 )
+
+app.include_router(auth_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def root() -> dict[str, str]:
