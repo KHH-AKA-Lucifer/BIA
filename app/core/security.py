@@ -1,5 +1,5 @@
 # import required libraries
-from jose import jwt 
+from jose import JWTError, jwt 
 from typing import Any
 from app.core.config import settings
 from passlib.context import CryptContext
@@ -54,4 +54,11 @@ def create_access_token(subject: str | Any, expires_delta: timedelta | None = No
         to_encode,
         settings.JWT_SECRET_KEY,
         algorithm=settings.JWT_ALGORITHM,
+    )
+
+def decode_token(token: str) -> dict:
+    return jwt.decode(
+        token,
+        settings.JWT_SECRET_KEY,
+        algorithms=[settings.JWT_ALGORITHM],
     )
