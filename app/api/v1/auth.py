@@ -23,6 +23,8 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)) -> UserRespon
     return user
 
 @router.post("/login", response_model=TokenResponse)
+
+# JSON request not a good practice 
 # def login(user_in: UserLogin, db: Session = Depends(get_db)) -> TokenResponse:
 #     user = authenticate_user(db, user_in.email, user_in.password)
 #     if not user:
@@ -36,6 +38,7 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)) -> UserRespon
 #         access_token=access_token,
 #         token_type="bearer",
 #     )
+
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db:Session = Depends(get_db),
