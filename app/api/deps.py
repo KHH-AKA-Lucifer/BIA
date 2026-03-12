@@ -3,6 +3,7 @@ from jose import JWTError
 from app.models.user import User
 from app.db.sessions import get_db
 from sqlalchemy.orm import Session
+from collections.abc import Callable
 from app.core.security import decode_token
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, HTTPException, status
@@ -24,7 +25,7 @@ def get_current_user(
         user_id : int | None = payload.get("sub")
         if user_id is None:
             raise credentials_exception
-    except JWTError:
+    except (JWTError, ValueError):
         raise credentials_exception
     
     user = get_user_by_id(db, int(user_id))
@@ -41,3 +42,16 @@ def get_current_active_user(
             detail="Inactive user"
         )
     return current_user
+
+def require_roles(*allowed_roles:str) -> Callable:
+    def role_checker(
+            current_user: User = Depends(get_current_active_user),
+    ) -> User:
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions",
+            )
+        return current_user
+    
+    return role_checker
