@@ -62,7 +62,7 @@ class UserResponse(BaseModel):
     -------
     None
     """
-    #   response schema
+    #   response schemas
     id: int
     email:  EmailStr
     role: str 
