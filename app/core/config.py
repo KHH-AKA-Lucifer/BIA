@@ -1,4 +1,5 @@
 # import required modules
+from urllib.parse import quote_plus
 from pydantic_settings import BaseSettings, SettingsConfigDict 
 
 class Settings(BaseSettings):
@@ -35,8 +36,9 @@ class Settings(BaseSettings):
     # decortor that turns method into a variable
     @property
     def database_url(self) -> str:
+        encoded_password=quote_plus(self.POSTGRES_PASSWORD)
         return(
-            f"postgresql+psycopg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"postgresql+psycopg://{self.POSTGRES_USER}:{encoded_password}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"        
             )
     
