@@ -45,16 +45,38 @@ def create_access_token(subject: str | Any, expires_delta: timedelta | None = No
             minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
         )
     
-    to_encode = {
+    payload = {
         "sub": str(subject),
+        "type": "access",
         "exp": expire
     }
 
     return jwt.encode(
-        to_encode,
+        payload,
         settings.JWT_SECRET_KEY,
         algorithm=settings.JWT_ALGORITHM,
     )
+
+def create_refresh_token(subject: int | Any, expires_delta: timedelta | None = None) -> str:
+    if expires_delta is not None:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(
+            days=7
+        )
+
+    payload = {
+        "sub": str(subject),
+        "type": "refresh",
+        "exp": expire
+    }
+
+    return jwt.encode(
+        payload,
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM
+    )
+
 
 def decode_token(token: str) -> dict:
     return jwt.decode(
