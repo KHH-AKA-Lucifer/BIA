@@ -8,6 +8,7 @@ from app.core.config import settings
 from contextlib import asynccontextmanager
 from app.core.logging import setup_logging
 from app.api.v1.auth import router as auth_router
+from app.api.v1.user import router as users_router
 
 setup_logging()
 logger = logging.getLogger("app")
@@ -31,6 +32,8 @@ app = FastAPI(
 )
 
 app.include_router(auth_router, prefix=settings.API_V1_STR)
+app.include_router(users_router, prefix=settings.API_V1_STR)
+
 
 @app.get("/")
 def root() -> dict[str, str]:
@@ -44,4 +47,4 @@ def check_db(db: Session = Depends(get_db)) -> dict[str, str]:
     return {"database": "connected"}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8010)
+    uvicorn.run(app, host="0.0.0.0", port=8010, reload=True)
