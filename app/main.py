@@ -47,4 +47,4 @@ def check_db(db: Session = Depends(get_db)) -> dict[str, str]:
     return {"database": "connected"}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8010, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8010, reload=True)
