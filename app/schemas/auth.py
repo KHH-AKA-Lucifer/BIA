@@ -51,6 +51,20 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
 
+class RefreshTokenRequest(BaseModel):
+    """
+    Schema class for refresh token request 
+
+    params
+    ------
+    BaseModel: object inheritance 
+
+    returns
+    -------
+    None
+    """
+    refresh_token: str
+
 class UserResponse(BaseModel):
     """
     Schema class for user response 

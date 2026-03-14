@@ -8,10 +8,11 @@ from app.core.config import settings
 from fastapi.security import OAuth2PasswordRequestForm
 from app.core.security import verify_password, hash_password
 from fastapi import APIRouter, Depends, HTTPException, status 
-from app.api.deps import get_current_active_user, require_roles
+from app.api.deps import get_current_active_user, require_roles, get_user_by_id
 from app.core.security import create_access_token, create_refresh_token,decode_token
-from app.schemas.auth import TokenResponse, UserRegister, UserResponse, ChangePasswordRequest  #UserLogin
 from app.services.auth_service import authenticate_user, create_user, get_user_by_email
+from app.schemas.auth import TokenResponse, UserRegister, UserResponse, ChangePasswordRequest, RefreshTokenRequest  #UserLogin
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger("app")
@@ -84,24 +85,28 @@ def reset_password(
     return {"message": "Password updated successfully"}  
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh_token(refreshtoken: str):
-
+def refresh_token(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
     try:
-        payload = decode_token(refreshtoken)
-        if payload.get("type") != "refresh":
+        token_data = decode_token(payload.refreshtoken)
+        if token_data.get("type") != "refresh":
             raise HTTPException(
                 status_code=401,
                 detail="Invalid refresh token",
             )
         
-        user_id = int(payload.get("sub"))
+        user_id = int(token_data.get("sub"))
     
-    except JWTError:
+    except (JWTError, ValueError, TypeError):
         raise HTTPException(
             status_code=401,
             detail="Invalid refresh token",
         )
     
+    user = get_user_by_id(db, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="User is inactive or not found")
+    
+
     new_access = create_access_token(user_id)
     new_refresh = create_refresh_token(user_id)
     
