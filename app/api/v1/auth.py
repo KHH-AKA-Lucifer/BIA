@@ -69,7 +69,7 @@ def reset_password(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    if not verify_password(payload.current_password, current_user.hashed_password):
+    if not verify_password(payload.current_password, current_user.password):
         raise HTTPException(
             status_code=400,
             detail="Current password incorrect",
