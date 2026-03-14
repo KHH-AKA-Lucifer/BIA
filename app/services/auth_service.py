@@ -36,12 +36,12 @@ def authenticate_user(db: Session, email: str, password: str) -> User | None:
     return user
 
 def deactivate_user_by_id(db: Session, user_id: int) -> User | None:
-    user = db.get(user, user_id)
+    user = db.get(User, user_id)
     if user is None:
         return None
     
     user.is_active = False
-    db.add(User)
+    db.add(user)
     db.commit()
     db.refresh(user)
     return user
