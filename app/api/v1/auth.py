@@ -8,9 +8,9 @@ from app.core.config import settings
 from fastapi.security import OAuth2PasswordRequestForm
 from app.core.security import verify_password, hash_password
 from fastapi import APIRouter, Depends, HTTPException, status 
-from app.api.deps import get_current_active_user, require_roles, get_user_by_id
+from app.api.deps import get_current_active_user, require_roles
 from app.core.security import create_access_token, create_refresh_token,decode_token
-from app.services.auth_service import authenticate_user, create_user, get_user_by_email
+from app.services.auth_service import authenticate_user, create_user, get_user_by_email, get_user_by_id
 from app.schemas.auth import TokenResponse, UserRegister, UserResponse, ChangePasswordRequest, RefreshTokenRequest  #UserLogin
 
 
@@ -76,7 +76,7 @@ def reset_password(
             detail="Current password incorrect",
         )
 
-    current_user.hashed_password = hash_password(payload.new_password)
+    current_user.password = hash_password(payload.new_password)
 
     db.add(current_user)
     db.commit()
@@ -87,7 +87,7 @@ def reset_password(
 @router.post("/refresh", response_model=TokenResponse)
 def refresh_token(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
     try:
-        token_data = decode_token(payload.refreshtoken)
+        token_data = decode_token(payload.refresh_token)
         if token_data.get("type") != "refresh":
             raise HTTPException(
                 status_code=401,
