@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from app.core.logging import setup_logging
 from app.api.v1.auth import router as auth_router
 from app.api.v1.user import router as users_router
+from app.api.v1.dashboard import router as dashboard_router
 
 setup_logging()
 logger = logging.getLogger("app")
@@ -33,6 +34,7 @@ app = FastAPI(
 
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(users_router, prefix=settings.API_V1_STR)
+app.include_router(dashboard_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")
