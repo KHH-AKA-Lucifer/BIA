@@ -82,6 +82,42 @@ const DashboardPage: React.FC = () => {
     critical: machines.filter((m) => m.utilization < 40).length,
   }
 
+  // Statistical calculations
+  const calculateStats = () => {
+    if (machines.length === 0) return null
+    const utils = machines.map(m => m.utilization).sort((a, b) => a - b)
+    const sum = utils.reduce((a, b) => a + b, 0)
+    const mean = sum / utils.length
+    const median = utils.length % 2 === 0 ? (utils[utils.length / 2 - 1] + utils[utils.length / 2]) / 2 : utils[Math.floor(utils.length / 2)]
+    const variance = utils.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / utils.length
+    const stdDev = Math.sqrt(variance)
+    const q1Idx = Math.floor(utils.length * 0.25)
+    const q3Idx = Math.floor(utils.length * 0.75)
+    const q1 = utils[q1Idx]
+    const q3 = utils[q3Idx]
+    const iqr = q3 - q1
+    const cv = (stdDev / mean) * 100 // Coefficient of Variation
+    
+    return {
+      mean: mean.toFixed(1),
+      median: median.toFixed(1),
+      stdDev: stdDev.toFixed(1),
+      min: utils[0].toFixed(1),
+      max: utils[utils.length - 1].toFixed(1),
+      range: (utils[utils.length - 1] - utils[0]).toFixed(1),
+      q1: q1.toFixed(1),
+      q3: q3.toFixed(1),
+      iqr: iqr.toFixed(1),
+      cv: cv.toFixed(1),
+      q1Count: machines.filter(m => m.utilization <= q1).length,
+      q2Count: machines.filter(m => m.utilization > q1 && m.utilization <= median).length,
+      q3Count: machines.filter(m => m.utilization > median && m.utilization <= q3).length,
+      q4Count: machines.filter(m => m.utilization > q3).length,
+    }
+  }
+
+  const stats = calculateStats()
+
   // Colors
   const COLORS = ['#60a5fa', '#a78bfa', '#34d399', '#fbbf24', '#f87171', '#fb923c', '#a1e8af', '#91d5ff']
 
@@ -480,6 +516,115 @@ const DashboardPage: React.FC = () => {
                 </ResponsiveContainer>
               </div>
             </div>
+
+            {/* Statistical Analysis Section */}
+            {stats && (
+              <div
+                style={{
+                  marginTop: '18px',
+                }}
+              >
+                <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
+                  Statistical Analysis
+                </h3>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 1fr 1fr',
+                    gap: '12px',
+                  }}
+                >
+                  {/* Central Tendency */}
+                  <div style={{ ...cardStyle, padding: '12px' }}>
+                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '10px', textTransform: 'uppercase', fontWeight: '600' }}>
+                      Central Tendency
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div>
+                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>Mean</span>
+                        <div style={{ fontSize: '16px', fontWeight: '700', color: '#60a5fa' }}>{stats.mean}%</div>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>Median</span>
+                        <div style={{ fontSize: '16px', fontWeight: '700', color: '#a78bfa' }}>{stats.median}%</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dispersion */}
+                  <div style={{ ...cardStyle, padding: '12px' }}>
+                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '10px', textTransform: 'uppercase', fontWeight: '600' }}>
+                      Dispersion
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div>
+                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>Std Dev</span>
+                        <div style={{ fontSize: '16px', fontWeight: '700', color: '#fbbf24' }}>{stats.stdDev}%</div>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>CV</span>
+                        <div style={{ fontSize: '14px', fontWeight: '700', color: '#fb923c' }}>{stats.cv}%</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Range & Extremes */}
+                  <div style={{ ...cardStyle, padding: '12px' }}>
+                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '10px', textTransform: 'uppercase', fontWeight: '600' }}>
+                      Range
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div>
+                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>Min - Max</span>
+                        <div style={{ fontSize: '14px', fontWeight: '700', color: '#34d399' }}>{stats.min}% - {stats.max}%</div>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>Span</span>
+                        <div style={{ fontSize: '14px', fontWeight: '700', color: '#22c55e' }}>{stats.range}%</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quartiles */}
+                  <div style={{ ...cardStyle, padding: '12px' }}>
+                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '10px', textTransform: 'uppercase', fontWeight: '600' }}>
+                      Quartiles
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div>
+                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>Q1 | Q3</span>
+                        <div style={{ fontSize: '14px', fontWeight: '700', color: '#a1e8af' }}>{stats.q1}% | {stats.q3}%</div>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>IQR</span>
+                        <div style={{ fontSize: '14px', fontWeight: '700', color: '#91d5ff' }}>{stats.iqr}%</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quartile Distribution */}
+                <div style={{ ...cardStyle, padding: '14px', marginTop: '12px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '10px' }}>
+                    Quartile Distribution
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                    {[
+                      { label: 'Q1 (Bottom)', count: stats.q1Count, color: '#ef4444', range: `< ${stats.q1}%` },
+                      { label: 'Q2 (Lower)', count: stats.q2Count, color: '#f97316', range: `${stats.q1}% - ${stats.median}%` },
+                      { label: 'Q3 (Upper)', count: stats.q3Count, color: '#eab308', range: `${stats.median}% - ${stats.q3}%` },
+                      { label: 'Q4 (Top)', count: stats.q4Count, color: '#22c55e', range: `> ${stats.q3}%` },
+                    ].map((q, i) => (
+                      <div key={`q-${i}`} style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)' }}>{q.label}</div>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: q.color, margin: '4px 0' }}>{q.count}</div>
+                        <div style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.4)' }}>{q.range}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
