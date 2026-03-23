@@ -48,6 +48,24 @@ const DashboardPage: React.FC = () => {
   const alertCount = data ? data.alerts.length : 0
   const machines = data ? Object.entries(data.machine_utilization).map(([id, util]) => ({ id, utilization: util as number })) : []
 
+  // Alert correlation analysis
+  const alertsWithMetrics = data
+    ? data.alerts.map((alert: string) => {
+        const machineMatch = alert.match(/^([A-Z0-9]+)/)
+        const machineId = machineMatch ? machineMatch[1] : null
+        const machine = machines.find(m => m.id === machineId)
+        return {
+          message: alert,
+          machineId,
+          utilization: machine?.utilization ?? 0,
+          isAtRiskMachine: (machine?.utilization ?? 0) < avgMachineUtilization * 0.6, // More than 40% below average
+        }
+      })
+    : []
+
+  const alertsCorrelatedWithLowUtil = alertsWithMetrics.filter(a => a.isAtRiskMachine).length
+  const alertCorrelationPercentage = alertCount > 0 ? ((alertsCorrelatedWithLowUtil / alertCount) * 100).toFixed(0) : 0
+
   // Revenue by category data (pie chart)
   const revenuePieData = data
     ? data.revenue_by_category.labels.map((label: string, idx: number) => ({
@@ -619,6 +637,137 @@ const DashboardPage: React.FC = () => {
                         <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)' }}>{q.label}</div>
                         <div style={{ fontSize: '20px', fontWeight: '700', color: q.color, margin: '4px 0' }}>{q.count}</div>
                         <div style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.4)' }}>{q.range}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Alert Correlation Analysis Panel */}
+            {alertCount > 0 && (
+              <div style={{ marginTop: '18px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
+                  Alert Correlation Analysis
+                </h3>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '12px',
+                    marginBottom: '12px',
+                  }}
+                >
+                  {/* Total Alerts Card */}
+                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
+                      Total Alerts
+                    </div>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#ef4444' }}>{alertCount}</div>
+                  </div>
+
+                  {/* Correlated Alerts Card */}
+                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center', borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
+                      Correlated with Low Utilization
+                    </div>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#f87171' }}>
+                      {alertsCorrelatedWithLowUtil}
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '4px' }}>
+                      {alertCorrelationPercentage}% of alerts
+                    </div>
+                  </div>
+
+                  {/* Uncorrelated Alerts Card */}
+                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center', borderColor: 'rgba(96, 165, 250, 0.2)' }}>
+                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
+                      Uncorrelated (Normal Ops)
+                    </div>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#60a5fa' }}>
+                      {alertCount - alertsCorrelatedWithLowUtil}
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '4px' }}>
+                      {((((alertCount - alertsCorrelatedWithLowUtil) / alertCount) * 100)).toFixed(0)}% of alerts
+                    </div>
+                  </div>
+                </div>
+
+                {/* Alert Details List */}
+                <div style={{ ...cardStyle, padding: '14px', maxHeight: '280px', overflowY: 'auto' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '10px' }}>
+                    Alert Details
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {alertsWithMetrics.map((alert, idx) => (
+                      <div
+                        key={`alert-${idx}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '10px',
+                          backgroundColor: alert.isAtRiskMachine ? 'rgba(239, 68, 68, 0.08)' : 'rgba(96, 165, 250, 0.05)',
+                          borderLeft: `3px solid ${alert.isAtRiskMachine ? '#ef4444' : '#60a5fa'}`,
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            minWidth: '70px',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            backgroundColor: alert.isAtRiskMachine ? 'rgba(239, 68, 68, 0.2)' : 'rgba(96, 165, 250, 0.2)',
+                            color: alert.isAtRiskMachine ? '#fca5a5' : '#93c5fd',
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            textAlign: 'center',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {alert.machineId || 'Unknown'}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div
+                            style={{
+                              color: '#e0e0e0',
+                              fontSize: '11px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {alert.message.substring(alert.message.indexOf(' ') + 1)}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: '3px',
+                            backgroundColor: alert.isAtRiskMachine ? 'rgba(239, 68, 68, 0.2)' : 'rgba(96, 165, 250, 0.2)',
+                            color: alert.isAtRiskMachine ? '#fca5a5' : '#93c5fd',
+                            fontSize: '10px',
+                            fontWeight: '600',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {(alert.utilization ?? 0).toFixed(1)}%
+                        </div>
+                        {alert.isAtRiskMachine && (
+                          <div
+                            style={{
+                              fontSize: '9px',
+                              padding: '3px 6px',
+                              borderRadius: '2px',
+                              backgroundColor: 'rgba(239, 68, 68, 0.3)',
+                              color: '#fca5a5',
+                              fontWeight: '700',
+                            }}
+                          >
+                            AT RISK
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
