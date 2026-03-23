@@ -26,7 +26,7 @@ import {
   Treemap,
 } from 'recharts'
 
-type TabType = 'executive' | 'machines' | 'geographic'
+type TabType = 'executive' | 'machines' | 'geographic' | 'locations'
 
 const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth()
@@ -92,6 +92,41 @@ const DashboardPage: React.FC = () => {
           value: (revenue as number) / 1000,
         }))
     : []
+
+  // Location grouping with analytics
+  const getLocationAnalytics = () => {
+    if (!data) return []
+    
+    const locationRevenue = Object.entries(data.top_locations).map(([location, revenue]) => ({
+      location,
+      revenue: revenue as number,
+    }))
+    
+    const locationCoordinates = (data.map || []).reduce((acc: any, loc: any) => {
+      acc[loc.location] = { lat: loc.lat, lon: loc.lon }
+      return acc
+    }, {})
+    
+    const totalLocationRevenue = locationRevenue.reduce((sum, loc) => sum + loc.revenue, 0)
+    
+    return locationRevenue
+      .sort((a, b) => b.revenue - a.revenue)
+      .map((loc, idx) => {
+        const revenuePercent = ((loc.revenue / totalLocationRevenue) * 100).toFixed(1)
+        const coords = locationCoordinates[loc.location]
+        
+        return {
+          rank: idx + 1,
+          location: loc.location,
+          revenue: loc.revenue,
+          revenuePercent: parseFloat(revenuePercent),
+          lat: coords?.lat,
+          lon: coords?.lon,
+        }
+      })
+  }
+  
+  const locationAnalytics = getLocationAnalytics()
 
   // Health status
   const healthStatus = {
@@ -309,6 +344,13 @@ const DashboardPage: React.FC = () => {
           >
             <MapPin className="h-4 w-4" />
             Geographic
+          </button>
+          <button
+            onClick={() => setActiveTab('locations')}
+            style={tabButtonStyle(activeTab === 'locations')}
+          >
+            <MapPin className="h-4 w-4" />
+            Locations
           </button>
         </div>
       </div>
@@ -1254,6 +1296,150 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* LOCATIONS TAB */}
+        {activeTab === 'locations' && (
+          <div>
+            {/* Location Summary Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
+                  Total Locations
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#60a5fa' }}>
+                  {locationAnalytics.length}
+                </div>
+              </div>
+              <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
+                  Total Location Revenue
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#10b981' }}>
+                  ${(locationAnalytics.reduce((sum, loc) => sum + loc.revenue, 0) / 1000).toFixed(0)}K
+                </div>
+              </div>
+              <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
+                  Top Location Revenue
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#fbbf24' }}>
+                  ${(locationAnalytics[0]?.revenue / 1000).toFixed(0)}K
+                </div>
+              </div>
+            </div>
+
+            {/* Location Detailed Table */}
+            <div style={{ ...cardStyle, padding: '14px' }}>
+              <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
+                Location Performance Breakdown
+              </h3>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.6)' }}>
+                        Rank
+                      </th>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.6)' }}>
+                        Location
+                      </th>
+                      <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.6)' }}>
+                        Revenue
+                      </th>
+                      <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.6)' }}>
+                        % of Total
+                      </th>
+                      <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.6)' }}>
+                        Coordinates
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {locationAnalytics.map((loc, idx) => (
+                      <tr
+                        key={`loc-${idx}`}
+                        style={{
+                          borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                          backgroundColor: idx % 2 === 0 ? 'rgba(255, 255, 255, 0.01)' : 'transparent',
+                        }}
+                      >
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: '#60a5fa', fontWeight: '600' }}>
+                          #{loc.rank}
+                        </td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: '#e0e0e0' }}>
+                          {loc.location}
+                        </td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: '#10b981', fontWeight: '600', textAlign: 'right' }}>
+                          ${(loc.revenue / 1000).toFixed(1)}K
+                        </td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', textAlign: 'right' }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'flex-end',
+                              gap: '8px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: '60px',
+                                height: '20px',
+                                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                borderRadius: '4px',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: `${loc.revenuePercent}%`,
+                                  height: '100%',
+                                  backgroundColor: loc.rank === 1 ? '#fbbf24' : loc.rank <= 2 ? '#60a5fa' : '#34d399',
+                                  transition: 'width 0.3s ease',
+                                }}
+                              />
+                            </div>
+                            <span style={{ color: 'rgba(255, 255, 255, 0.7)', width: '30px', textAlign: 'right' }}>
+                              {loc.revenuePercent.toFixed(1)}%
+                            </span>
+                          </div>
+                        </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Revenue Distribution */}
+              <div style={{ marginTop: '16px' }}>
+                <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
+                  Revenue Distribution by Location
+                </h3>
+                <div style={{ ...cardStyle, padding: '20px', minHeight: '300px' }}>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={locationAnalytics.map(loc => ({ name: loc.location, value: parseFloat((loc.revenue / 1000).toFixed(1)) }))}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name }) => name}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {COLORS.map((color, index) => (
+                          <Cell key={`cell-${index}`} fill={color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => `$${value}K`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          )}
       </main>
     </div>
   )
