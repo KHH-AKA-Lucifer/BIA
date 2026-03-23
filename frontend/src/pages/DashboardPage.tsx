@@ -698,6 +698,69 @@ const DashboardPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* Performance Tier Segmentation */}
+            <div style={{ marginTop: '16px' }}>
+              <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
+                Performance Tier Segmentation
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '14px' }}>
+                {[
+                  { tier: 'Elite', range: '90-100%', color: '#10b981', bgColor: 'rgba(16, 185, 129, 0.15)', count: machines.filter(m => m.utilization >= 90).length },
+                  { tier: 'High', range: '70-89%', color: '#84cc16', bgColor: 'rgba(132, 204, 22, 0.15)', count: machines.filter(m => m.utilization >= 70 && m.utilization < 90).length },
+                  { tier: 'Average', range: '40-69%', color: '#eab308', bgColor: 'rgba(234, 179, 8, 0.15)', count: machines.filter(m => m.utilization >= 40 && m.utilization < 70).length },
+                  { tier: 'Low', range: '20-39%', color: '#f97316', bgColor: 'rgba(249, 115, 22, 0.15)', count: machines.filter(m => m.utilization >= 20 && m.utilization < 40).length },
+                  { tier: 'Critical', range: '<20%', color: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.15)', count: machines.filter(m => m.utilization < 20).length },
+                ].map((tier, idx) => {
+                  const percentage = ((tier.count / machines.length) * 100).toFixed(1)
+                  return (
+                    <div key={`tier-${idx}`} style={{ ...cardStyle, padding: '12px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '11px', fontWeight: '600', color: tier.color, marginBottom: '8px', textTransform: 'uppercase' }}>
+                        {tier.tier}
+                      </div>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: tier.color, marginBottom: '4px' }}>
+                        {tier.count}
+                      </div>
+                      <div style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '6px' }}>
+                        {percentage}% of fleet
+                      </div>
+                      <div style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.4)', fontWeight: '500' }}>
+                        {tier.range}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Tier Distribution Bar */}
+              <div style={{ ...cardStyle, padding: '14px' }}>
+                <div style={{ fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '12px' }}>
+                  Fleet Composition
+                </div>
+                <div style={{ height: '24px', backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: '4px', display: 'flex', overflow: 'hidden' }}>
+                  {[
+                    { count: machines.filter(m => m.utilization >= 90).length, color: '#10b981' },
+                    { count: machines.filter(m => m.utilization >= 70 && m.utilization < 90).length, color: '#84cc16' },
+                    { count: machines.filter(m => m.utilization >= 40 && m.utilization < 70).length, color: '#eab308' },
+                    { count: machines.filter(m => m.utilization >= 20 && m.utilization < 40).length, color: '#f97316' },
+                    { count: machines.filter(m => m.utilization < 20).length, color: '#ef4444' },
+                  ].map((segment, idx) => {
+                    const width = (segment.count / machines.length) * 100
+                    return (
+                      <div
+                        key={`seg-${idx}`}
+                        style={{
+                          flex: width,
+                          backgroundColor: segment.color,
+                          opacity: 0.7,
+                          minWidth: width > 5 ? undefined : '2px',
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
