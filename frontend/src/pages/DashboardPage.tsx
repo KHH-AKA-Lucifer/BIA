@@ -82,6 +82,60 @@ const DashboardPage: React.FC = () => {
       }))
     : []
 
+  // Profit trend metrics
+  const getProfitMetrics = () => {
+    if (!data || !data.weekly_profit.values.length) return null
+    
+    const profits = data.weekly_profit.values
+    const labels = data.weekly_profit.labels
+    
+    const totalProfit = profits.reduce((sum, val) => sum + val, 0)
+    const avgProfit = totalProfit / profits.length
+    const maxProfit = Math.max(...profits)
+    const minProfit = Math.min(...profits)
+    const maxDay = labels[profits.indexOf(maxProfit)]
+    const minDay = labels[profits.indexOf(minProfit)]
+    
+    // Calculate day-over-day changes
+    const changes = []
+    for (let i = 1; i < profits.length; i++) {
+      const change = profits[i] - profits[i - 1]
+      const percentChange = ((change / profits[i - 1]) * 100)
+      changes.push({
+        from: labels[i - 1],
+        to: labels[i],
+        change,
+        percentChange,
+      })
+    }
+    
+    // Trend: overall direction
+    const firstHalf = profits.slice(0, Math.ceil(profits.length / 2)).reduce((a, b) => a + b, 0) / Math.ceil(profits.length / 2)
+    const secondHalf = profits.slice(Math.ceil(profits.length / 2)).reduce((a, b) => a + b, 0) / Math.floor(profits.length / 2)
+    const weekOverWeekChange = secondHalf - firstHalf
+    const weekOverWeekPercent = ((weekOverWeekChange / firstHalf) * 100)
+    
+    // Volatility (standard deviation)
+    const variance = profits.reduce((sum, val) => sum + Math.pow(val - avgProfit, 2), 0) / profits.length
+    const stdDev = Math.sqrt(variance)
+    const cv = (stdDev / avgProfit) * 100
+    
+    return {
+      totalProfit,
+      avgProfit,
+      maxProfit,
+      minProfit,
+      maxDay,
+      minDay,
+      weekOverWeekChange,
+      weekOverWeekPercent,
+      volatility: cv,
+      dayOverDayChanges: changes,
+    }
+  }
+  
+  const profitMetrics = getProfitMetrics()
+
   // Top locations treemap data
   const locationsTreemapData = data
     ? Object.entries(data.top_locations)
@@ -687,6 +741,98 @@ const DashboardPage: React.FC = () => {
                         <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)' }}>{q.label}</div>
                         <div style={{ fontSize: '20px', fontWeight: '700', color: q.color, margin: '4px 0' }}>{q.count}</div>
                         <div style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.4)' }}>{q.range}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Profit Trend Metrics */}
+            {profitMetrics && (
+              <div style={{ marginTop: '18px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
+                  Profit Trend Analysis
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '14px' }}>
+                  {/* Total Profit */}
+                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
+                      Total Weekly Profit
+                    </div>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#10b981', marginBottom: '4px' }}>
+                      ${(profitMetrics.totalProfit / 1000).toFixed(1)}K
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                      {profitMetrics.dayOverDayChanges.length} days
+                    </div>
+                  </div>
+
+                  {/* Best Day */}
+                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center', borderColor: 'rgba(16, 185, 129, 0.3)' }}>
+                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
+                      Best Day
+                    </div>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#86efac', marginBottom: '4px' }}>
+                      ${(profitMetrics.maxProfit / 1000).toFixed(1)}K
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', fontWeight: '500' }}>
+                      {profitMetrics.maxDay}
+                    </div>
+                  </div>
+
+                  {/* Worst Day */}
+                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center', borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
+                      Worst Day
+                    </div>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#fca5a5', marginBottom: '4px' }}>
+                      ${(profitMetrics.minProfit / 1000).toFixed(1)}K
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', fontWeight: '500' }}>
+                      {profitMetrics.minDay}
+                    </div>
+                  </div>
+
+                  {/* Week-over-Week Change */}
+                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center', borderColor: profitMetrics.weekOverWeekChange >= 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)' }}>
+                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
+                      Trend (1st vs 2nd Half)
+                    </div>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: profitMetrics.weekOverWeekChange >= 0 ? '#86efac' : '#fca5a5', marginBottom: '4px' }}>
+                      {profitMetrics.weekOverWeekPercent.toFixed(1)}%
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                      {profitMetrics.weekOverWeekChange >= 0 ? '📈 Improving' : '📉 Declining'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Day-over-Day Changes */}
+                <div style={{ ...cardStyle, padding: '14px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '10px' }}>
+                    Daily Changes
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px' }}>
+                    {profitMetrics.dayOverDayChanges.map((change, idx) => (
+                      <div
+                        key={`change-${idx}`}
+                        style={{
+                          ...cardStyle,
+                          padding: '10px',
+                          backgroundColor: change.change >= 0 ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                          borderColor: change.change >= 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+                        }}
+                      >
+                        <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '4px' }}>
+                          {change.from} → {change.to}
+                        </div>
+                        <div style={{ fontSize: '16px', fontWeight: '700', color: change.change >= 0 ? '#86efac' : '#fca5a5', marginBottom: '3px' }}>
+                          {change.change >= 0 ? '+' : ''} ${(change.change / 1000).toFixed(1)}K
+                        </div>
+                        <div style={{ fontSize: '9px', color: change.change >= 0 ? '#86efac' : '#fca5a5' }}>
+                          {change.percentChange >= 0 ? '+' : ''}{change.percentChange.toFixed(1)}%
+                        </div>
                       </div>
                     ))}
                   </div>
