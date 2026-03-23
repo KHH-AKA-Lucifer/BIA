@@ -20,42 +20,115 @@ const KPICard: React.FC<KPICardProps> = ({
   trendValue,
   loading,
 }) => {
-  const iconMap = {
-    revenue: <DollarSign className="h-8 w-8 text-blue-600" />,
-    machines: <MapPin className="h-8 w-8 text-green-600" />,
-    utilization: <Zap className="h-8 w-8 text-yellow-600" />,
-    alerts: <AlertCircle className="h-8 w-8 text-red-600" />,
+  const [isHovered, setIsHovered] = React.useState(false)
+
+  const iconConfig = {
+    revenue: {
+      icon: <DollarSign className="h-8 w-8" />,
+      color: '#60a5fa',
+      bgColor: 'rgba(96, 165, 250, 0.1)',
+    },
+    machines: {
+      icon: <MapPin className="h-8 w-8" />,
+      color: '#34d399',
+      bgColor: 'rgba(52, 211, 153, 0.1)',
+    },
+    utilization: {
+      icon: <Zap className="h-8 w-8" />,
+      color: '#fbbf24',
+      bgColor: 'rgba(251, 191, 36, 0.1)',
+    },
+    alerts: {
+      icon: <AlertCircle className="h-8 w-8" />,
+      color: '#f87171',
+      bgColor: 'rgba(248, 113, 113, 0.1)',
+    },
+  }
+
+  const cardStyle: React.CSSProperties = {
+    background: 'rgba(255, 255, 255, 0.08)',
+    backdropFilter: 'blur(10px)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: '12px',
+    padding: '24px',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+    transform: isHovered ? 'translateY(-8px)' : 'translateY(0)',
   }
 
   const trendIcon = {
-    up: <TrendingUp className="h-4 w-4 text-green-600" />,
-    down: <TrendingDown className="h-4 w-4 text-red-600" />,
+    up: <TrendingUp className="h-4 w-4" style={{ color: '#34d399' }} />,
+    down: <TrendingDown className="h-4 w-4" style={{ color: '#f87171' }} />,
     neutral: null,
   }
 
+  const iconsConfig = iconConfig[icon]
+
   return (
-    <div className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <p className="text-gray-500 text-sm font-medium mb-2">{title}</p>
+    <div
+      style={{
+        ...cardStyle,
+        minHeight: '160px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: '16px' }}>
+        <div style={{ flex: 1 }}>
+          <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '14px', fontWeight: '500', marginBottom: '12px' }}>
+            {title}
+          </p>
           {loading ? (
-            <div className="h-10 bg-gray-200 rounded animate-pulse w-24"></div>
+            <div
+              style={{
+                height: '40px',
+                background: 'rgba(255, 255, 255, 0.1)',
+                borderRadius: '8px',
+                width: '96px',
+                animation: 'pulse 2s infinite',
+              }}
+            />
           ) : (
-            <div className="flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-gray-900">{value}</p>
-              {unit && <span className="text-gray-600 text-sm">{unit}</span>}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <p style={{ fontSize: '32px', fontWeight: '700', color: '#fff', lineHeight: '1' }}>{value}</p>
+              {unit && <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '14px' }}>{unit}</span>}
             </div>
           )}
           {trend && trendValue && (
-            <div className="flex items-center gap-1 mt-2">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '12px' }}>
               {trendIcon[trend as keyof typeof trendIcon]}
-              <span className={`text-sm font-medium ${trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-gray-600'}`}>
+              <span
+                style={{
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: trend === 'up' ? '#34d399' : trend === 'down' ? '#f87171' : 'rgba(255, 255, 255, 0.6)',
+                }}
+              >
                 {trendValue}
               </span>
             </div>
           )}
         </div>
-        <div className="flex-shrink-0 p-3 bg-gray-50 rounded-lg">{iconMap[icon]}</div>
+        <div
+          style={{
+            flexShrink: 0,
+            padding: '12px',
+            background: iconsConfig.bgColor,
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: iconsConfig.color,
+            transition: 'all 0.3s ease',
+            transform: isHovered ? 'scale(1.1) rotate(5deg)' : 'scale(1)',
+          }}
+        >
+          {iconsConfig.icon}
+        </div>
       </div>
     </div>
   )

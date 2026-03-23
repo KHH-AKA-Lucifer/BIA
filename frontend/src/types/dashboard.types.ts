@@ -1,14 +1,19 @@
 export interface DashboardSummary {
-  revenue_by_category: Record<string, number>
-  weekly_profit: Record<string, number>
+  revenue_by_category: {
+    labels: string[]
+    values: number[]
+  }
+  weekly_profit: {
+    labels: string[]
+    values: number[]
+  }
   top_locations: Record<string, number>
-  machine_utilization: number
+  machine_utilization: Record<string, number>
   alerts: string[]
   map: Array<{
     location: string
-    latitude: number
-    longitude: number
-    revenue: number
+    lat: number
+    lon: number
   }>
 }
 
