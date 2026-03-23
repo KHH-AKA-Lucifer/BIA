@@ -116,6 +116,11 @@ const DashboardPage: React.FC = () => {
     const iqr = q3 - q1
     const cv = (stdDev / mean) * 100 // Coefficient of Variation
     
+    // Outlier detection: >2 standard deviations from mean
+    const upperThreshold = mean + 2 * stdDev
+    const lowerThreshold = Math.max(0, mean - 2 * stdDev)
+    const outliers = machines.filter(m => m.utilization > upperThreshold || m.utilization < lowerThreshold)
+    
     return {
       mean: mean.toFixed(1),
       median: median.toFixed(1),
@@ -131,6 +136,9 @@ const DashboardPage: React.FC = () => {
       q2Count: machines.filter(m => m.utilization > q1 && m.utilization <= median).length,
       q3Count: machines.filter(m => m.utilization > median && m.utilization <= q3).length,
       q4Count: machines.filter(m => m.utilization > q3).length,
+      outliers: outliers,
+      outlierUpperThreshold: upperThreshold.toFixed(1),
+      outlierLowerThreshold: lowerThreshold.toFixed(1),
     }
   }
 
@@ -1001,6 +1009,92 @@ const DashboardPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* Outlier Detection */}
+            {stats && stats.outliers && stats.outliers.length > 0 && (
+              <div style={{ marginTop: '16px' }}>
+                <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
+                  Anomaly Detection - Statistical Outliers
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center', borderColor: 'rgba(168, 85, 247, 0.3)' }}>
+                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
+                      Outliers Detected
+                    </div>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#a855f7' }}>
+                      {stats.outliers.length}
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '4px' }}>
+                      {((stats.outliers.length / machines.length) * 100).toFixed(1)}% of fleet
+                    </div>
+                  </div>
+                  <div style={{ ...cardStyle, padding: '14px' }}>
+                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '8px', fontWeight: '600' }}>
+                      Threshold Range
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#e0e0e0', lineHeight: '1.6' }}>
+                      <div>Lower: &lt; {stats.outlierLowerThreshold}%</div>
+                      <div>Upper: &gt; {stats.outlierUpperThreshold}%</div>
+                      <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '6px' }}>
+                        (±2σ from mean)
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ ...cardStyle, padding: '14px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '10px' }}>
+                    Outlier Machines
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px' }}>
+                    {stats.outliers.map((m) => {
+                      const util = m.utilization
+                      const meanVal = parseFloat(stats.mean)
+                      const type = util > meanVal ? 'High' : 'Low'
+                      const typeColor = util > meanVal ? '#8b5cf6' : '#f97316'
+                      const bgColor = util > meanVal ? 'rgba(139, 92, 246, 0.1)' : 'rgba(249, 115, 22, 0.1)'
+                      
+                      return (
+                        <div
+                          key={m.id}
+                          style={{
+                            ...cardStyle,
+                            padding: '10px',
+                            backgroundColor: bgColor,
+                            borderColor: typeColor,
+                            borderWidth: '1.5px',
+                            textAlign: 'center',
+                          }}
+                        >
+                          <div style={{ fontSize: '11px', fontWeight: '600', color: '#fff', marginBottom: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {m.id}
+                          </div>
+                          <div style={{ fontSize: '16px', fontWeight: '700', color: typeColor, marginBottom: '4px' }}>
+                            {util.toFixed(1)}%
+                          </div>
+                          <div style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.6)', backgroundColor: typeColor + '20', padding: '3px 6px', borderRadius: '3px' }}>
+                            {type} Outlier
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {stats && (!stats.outliers || stats.outliers.length === 0) && (
+              <div style={{ marginTop: '16px' }}>
+                <div style={{ ...cardStyle, padding: '20px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#10b981', marginBottom: '8px' }}>
+                    ✓ No Outliers Detected
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                    All machines are within normal operating range (±2σ from mean)
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
