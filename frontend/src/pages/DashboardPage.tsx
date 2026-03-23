@@ -848,6 +848,97 @@ const DashboardPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Machine Heatmap/Grid */}
+            <div style={{ marginTop: '16px' }}>
+              <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
+                Machine Heatmap - Complete Fleet Overview
+              </h3>
+              <div style={{ ...cardStyle, padding: '14px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
+                  {[...machines]
+                    .sort((a, b) => a.id.localeCompare(b.id))
+                    .map((m) => {
+                      const util = m.utilization
+                      // Color gradient: red (0%) to yellow (50%) to green (100%)
+                      let color = '#ef4444'
+                      if (util >= 80) color = '#10b981' // Green
+                      else if (util >= 60) color = '#84cc16' // Yellow-green
+                      else if (util >= 40) color = '#eab308' // Yellow
+                      else if (util >= 20) color = '#f97316' // Orange
+                      // else red
+                      
+                      const bgColor = util >= 80 ? 'rgba(16, 185, 129, 0.1)' :
+                                      util >= 60 ? 'rgba(132, 204, 22, 0.1)' :
+                                      util >= 40 ? 'rgba(234, 179, 8, 0.1)' :
+                                      util >= 20 ? 'rgba(249, 115, 22, 0.1)' :
+                                      'rgba(239, 68, 68, 0.1)'
+                      
+                      return (
+                        <div
+                          key={m.id}
+                          style={{
+                            ...cardStyle,
+                            padding: '12px',
+                            backgroundColor: bgColor,
+                            borderColor: color,
+                            borderWidth: '1.5px',
+                          }}
+                        >
+                          <div style={{ fontSize: '11px', fontWeight: '600', color: '#fff', marginBottom: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {m.id}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <div style={{ fontSize: '16px', fontWeight: '700', color: color }}>
+                              {util.toFixed(0)}%
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              width: '100%',
+                              height: '6px',
+                              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                              borderRadius: '3px',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${util}%`,
+                                height: '100%',
+                                backgroundColor: color,
+                                transition: 'width 0.3s ease',
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+                <div style={{ marginTop: '12px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ width: '12px', height: '12px', backgroundColor: '#10b981', borderRadius: '2px' }} />
+                    <span>Elite (80%+)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ width: '12px', height: '12px', backgroundColor: '#84cc16', borderRadius: '2px' }} />
+                    <span>High (60-79%)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ width: '12px', height: '12px', backgroundColor: '#eab308', borderRadius: '2px' }} />
+                    <span>Average (40-59%)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ width: '12px', height: '12px', backgroundColor: '#f97316', borderRadius: '2px' }} />
+                    <span>Low (20-39%)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ width: '12px', height: '12px', backgroundColor: '#ef4444', borderRadius: '2px' }} />
+                    <span>Critical (&lt;20%)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Performance Tier Segmentation */}
             <div style={{ marginTop: '16px' }}>
               <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
