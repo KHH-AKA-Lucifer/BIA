@@ -26,13 +26,16 @@ import {
   Treemap,
 } from 'recharts'
 
-type TabType = 'executive' | 'machines' | 'geographic' | 'locations'
+type TabType = 'executive' | 'machines' | 'geographic' | 'locations' | 'analytics'
 
 const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth()
   const { data, loading, error, refresh } = useDashboard()
 
   const [activeTab, setActiveTab] = React.useState<TabType>('executive')
+  const [dateRange, setDateRange] = React.useState<'week' | 'month' | 'quarter'>('week')
+  const [selectedLocation, setSelectedLocation] = React.useState<string | null>(null)
+  const [machineStatus, setMachineStatus] = React.useState<'all' | 'healthy' | 'warning' | 'critical'>('all')
 
   // Calculate metrics
   const totalRevenue = data
@@ -406,6 +409,126 @@ const DashboardPage: React.FC = () => {
             <MapPin className="h-4 w-4" />
             Locations
           </button>
+          <button
+            onClick={() => setActiveTab('analytics')}
+            style={tabButtonStyle(activeTab === 'analytics')}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Analytics
+          </button>
+        </div>
+      </div>
+
+      {/* Slicer Bar */}
+      <div
+        style={{
+          background: 'rgba(0, 0, 0, 0.2)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          padding: '12px 16px',
+        }}
+      >
+        <div style={{ maxWidth: '1600px', margin: '0 auto', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Date Range Slicer */}
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500' }}>📅 Period:</span>
+            {(['week', 'month', 'quarter'] as const).map(period => (
+              <button
+                key={period}
+                onClick={() => setDateRange(period)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: dateRange === period ? '1px solid rgba(96, 165, 250, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
+                  backgroundColor: dateRange === period ? 'rgba(96, 165, 250, 0.2)' : 'transparent',
+                  color: dateRange === period ? '#93c5fd' : 'rgba(255, 255, 255, 0.5)',
+                  fontSize: '11px',
+                  fontWeight: dateRange === period ? '600' : '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {period.charAt(0).toUpperCase() + period.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          {/* Location Slicer */}
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500' }}>📍 Location:</span>
+            <select
+              value={selectedLocation || ''}
+              onChange={(e) => setSelectedLocation(e.target.value || null)}
+              style={{
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                color: '#fff',
+                fontSize: '11px',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="">All Locations</option>
+              {data?.machine_utilization && Object.keys(data.machine_utilization).map(loc => (
+                <option key={loc} value={loc}>{loc}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Machine Status Slicer */}
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500' }}>🔧 Status:</span>
+            {(['all', 'healthy', 'warning', 'critical'] as const).map(status => (
+              <button
+                key={status}
+                onClick={() => setMachineStatus(status)}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '4px',
+                  border: machineStatus === status ? '1px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
+                  backgroundColor: machineStatus === status 
+                    ? status === 'critical' ? 'rgba(239, 68, 68, 0.2)' 
+                    : status === 'warning' ? 'rgba(235, 179, 8, 0.2)'
+                    : 'rgba(34, 197, 94, 0.2)'
+                    : 'transparent',
+                  color: machineStatus === status 
+                    ? status === 'critical' ? '#fca5a5' 
+                    : status === 'warning' ? '#fbbf24'
+                    : '#86efac'
+                    : 'rgba(255, 255, 255, 0.4)',
+                  fontSize: '10px',
+                  fontWeight: machineStatus === status ? '600' : '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  textTransform: 'capitalize',
+                }}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+
+          {/* Reset Button */}
+          <button
+            onClick={() => {
+              setDateRange('week')
+              setSelectedLocation(null)
+              setMachineStatus('all')
+            }}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              backgroundColor: 'transparent',
+              color: 'rgba(255, 255, 255, 0.5)',
+              fontSize: '11px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              marginLeft: 'auto',
+            }}
+          >
+            🔄 Reset
+          </button>
         </div>
       </div>
 
@@ -639,15 +762,58 @@ const DashboardPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Quick Alert Summary - Link to Analytics */}
+            {alertCount > 0 && (
+              <div
+                style={{
+                  marginTop: '18px',
+                  ...cardStyle,
+                  padding: '14px',
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  borderLeft: '3px solid #ef4444',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span style={{ fontSize: '13px', color: '#fca5a5' }}>
+                  ⚠️ {alertCount} active alert{alertCount !== 1 ? 's' : ''} detected • {alertsCorrelatedWithLowUtil} correlated with low utilization
+                </span>
+                <button
+                  onClick={() => setActiveTab('analytics')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    color: '#fca5a5',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                  }}
+                >
+                  View Analysis →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ANALYTICS TAB - Deep Dive Analysis */}
+        {activeTab === 'analytics' && (
+          <div>
             {/* Statistical Analysis Section */}
             {stats && (
               <div
                 style={{
-                  marginTop: '18px',
+                  marginBottom: '18px',
+                  ...cardStyle,
+                  borderRadius: '12px',
+                  padding: '16px',
                 }}
               >
-                <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
-                  Statistical Analysis
+                <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#a5f3fc', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  📊 Statistical Analysis
                 </h3>
                 <div
                   style={{
@@ -656,91 +822,103 @@ const DashboardPage: React.FC = () => {
                     gap: '12px',
                   }}
                 >
-                  {/* Central Tendency */}
-                  <div style={{ ...cardStyle, padding: '12px' }}>
-                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '10px', textTransform: 'uppercase', fontWeight: '600' }}>
-                      Central Tendency
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div>
-                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>Mean</span>
-                        <div style={{ fontSize: '16px', fontWeight: '700', color: '#60a5fa' }}>{stats.mean}%</div>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>Median</span>
-                        <div style={{ fontSize: '16px', fontWeight: '700', color: '#a78bfa' }}>{stats.median}%</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Dispersion */}
-                  <div style={{ ...cardStyle, padding: '12px' }}>
-                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '10px', textTransform: 'uppercase', fontWeight: '600' }}>
-                      Dispersion
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div>
-                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>Std Dev</span>
-                        <div style={{ fontSize: '16px', fontWeight: '700', color: '#fbbf24' }}>{stats.stdDev}%</div>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>CV</span>
-                        <div style={{ fontSize: '14px', fontWeight: '700', color: '#fb923c' }}>{stats.cv}%</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Range & Extremes */}
-                  <div style={{ ...cardStyle, padding: '12px' }}>
-                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '10px', textTransform: 'uppercase', fontWeight: '600' }}>
-                      Range
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div>
-                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>Min - Max</span>
-                        <div style={{ fontSize: '14px', fontWeight: '700', color: '#34d399' }}>{stats.min}% - {stats.max}%</div>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>Span</span>
-                        <div style={{ fontSize: '14px', fontWeight: '700', color: '#22c55e' }}>{stats.range}%</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Quartiles */}
-                  <div style={{ ...cardStyle, padding: '12px' }}>
-                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '10px', textTransform: 'uppercase', fontWeight: '600' }}>
-                      Quartiles
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div>
-                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>Q1 | Q3</span>
-                        <div style={{ fontSize: '14px', fontWeight: '700', color: '#a1e8af' }}>{stats.q1}% | {stats.q3}%</div>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>IQR</span>
-                        <div style={{ fontSize: '14px', fontWeight: '700', color: '#91d5ff' }}>{stats.iqr}%</div>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
-                {/* Quartile Distribution */}
+                {/* Statistics as Table */}
+                <div style={{ ...cardStyle, padding: '0', marginTop: '12px', overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'rgba(99, 102, 241, 0.15)', borderBottom: '1px solid rgba(99, 102, 241, 0.3)' }}>
+                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: '700', color: '#a5f3fc', textTransform: 'uppercase' }}>Metric</th>
+                        <th style={{ textAlign: 'right', padding: '12px 16px', fontSize: '11px', fontWeight: '700', color: '#a5f3fc', textTransform: 'uppercase' }}>Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { label: 'Mean', value: `${stats.mean}%`, color: '#60a5fa' },
+                        { label: 'Median', value: `${stats.median}%`, color: '#a78bfa' },
+                        { label: 'Std Dev', value: `${stats.stdDev}%`, color: '#fbbf24' },
+                        { label: 'Coefficient of Variation', value: `${stats.cv}%`, color: '#fb923c' },
+                        { label: 'Min', value: `${stats.min}%`, color: '#f87171' },
+                        { label: 'Max', value: `${stats.max}%`, color: '#22c55e' },
+                        { label: 'Range (Span)', value: `${stats.range}%`, color: '#34d399' },
+                        { label: 'Q1', value: `${stats.q1}%`, color: '#a1e8af' },
+                        { label: 'Q3', value: `${stats.q3}%`, color: '#91d5ff' },
+                        { label: 'IQR', value: `${stats.iqr}%`, color: '#cbd5e1' },
+                      ].map((row, idx) => (
+                        <tr
+                          key={`stat-${idx}`}
+                          style={{
+                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                            backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.01)',
+                          }}
+                        >
+                          <td style={{ padding: '12px 16px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                            {row.label}
+                          </td>
+                          <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: '700', color: row.color, textAlign: 'right' }}>
+                            {row.value}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Quartile Distribution Bar */}
                 <div style={{ ...cardStyle, padding: '14px', marginTop: '12px' }}>
                   <div style={{ fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '10px' }}>
                     Quartile Distribution
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                  <div style={{ height: '32px', backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', display: 'flex', overflow: 'hidden', gap: '2px', padding: '2px' }}>
                     {[
-                      { label: 'Q1 (Bottom)', count: stats.q1Count, color: '#ef4444', range: `< ${stats.q1}%` },
-                      { label: 'Q2 (Lower)', count: stats.q2Count, color: '#f97316', range: `${stats.q1}% - ${stats.median}%` },
-                      { label: 'Q3 (Upper)', count: stats.q3Count, color: '#eab308', range: `${stats.median}% - ${stats.q3}%` },
-                      { label: 'Q4 (Top)', count: stats.q4Count, color: '#22c55e', range: `> ${stats.q3}%` },
+                      { label: 'Q1', count: stats.q1Count, color: '#ef4444', range: `< ${stats.q1}%` },
+                      { label: 'Q2', count: stats.q2Count, color: '#f97316', range: `${stats.q1}% - ${stats.median}%` },
+                      { label: 'Q3', count: stats.q3Count, color: '#eab308', range: `${stats.median}% - ${stats.q3}%` },
+                      { label: 'Q4', count: stats.q4Count, color: '#22c55e', range: `> ${stats.q3}%` },
+                    ].map((q, i) => {
+                      const width = (q.count / machines.length) * 100
+                      return (
+                        <div
+                          key={`q-${i}`}
+                          style={{
+                            flex: width,
+                            backgroundColor: q.color,
+                            borderRadius: '4px',
+                            opacity: 0.8,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minWidth: width > 8 ? undefined : '0px',
+                            transition: 'opacity 0.3s ease',
+                            cursor: 'pointer',
+                            position: 'relative',
+                            overflow: 'hidden',
+                          }}
+                          title={`${q.label}: ${q.count} machines (${((q.count / machines.length) * 100).toFixed(1)}%)`}
+                        >
+                          {width > 15 && (
+                            <span style={{ fontSize: '11px', fontWeight: '700', color: '#000', zIndex: 1, textShadow: '0 0 2px rgba(255,255,255,0.5)' }}>
+                              {q.count}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div style={{ marginTop: '10px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', fontSize: '11px' }}>
+                    {[
+                      { label: 'Q1 (Bottom)', color: '#ef4444', range: `< ${stats.q1}%` },
+                      { label: 'Q2 (Lower)', color: '#f97316', range: `${stats.q1}% - ${stats.median}%` },
+                      { label: 'Q3 (Upper)', color: '#eab308', range: `${stats.median}% - ${stats.q3}%` },
+                      { label: 'Q4 (Top)', color: '#22c55e', range: `> ${stats.q3}%` },
                     ].map((q, i) => (
-                      <div key={`q-${i}`} style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)' }}>{q.label}</div>
-                        <div style={{ fontSize: '20px', fontWeight: '700', color: q.color, margin: '4px 0' }}>{q.count}</div>
-                        <div style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.4)' }}>{q.range}</div>
+                      <div key={`qlegend-${i}`} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <div style={{ width: '8px', height: '8px', backgroundColor: q.color, borderRadius: '2px' }} />
+                        <div style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                          <div style={{ fontSize: '10px', fontWeight: '600' }}>{q.label}</div>
+                          <div style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)' }}>{q.range}</div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -750,10 +928,58 @@ const DashboardPage: React.FC = () => {
 
             {/* Profit Trend Metrics */}
             {profitMetrics && (
-              <div style={{ marginTop: '18px' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
-                  Profit Trend Analysis
+              <div style={{ 
+                marginBottom: '18px',
+                ...cardStyle,
+                borderRadius: '12px',
+                padding: '16px',
+              }}>
+                <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#86efac', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  💰 Profit Trend Analysis
                 </h3>
+                
+                {/* Profit Trend Line Chart */}
+                <div style={{ ...cardStyle, padding: '20px', marginBottom: '14px', minHeight: '250px' }}>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart
+                      data={weeklyProfitData}
+                      margin={{ top: 10, right: 20, left: -10, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
+                      <XAxis 
+                        dataKey="week" 
+                        stroke="rgba(255, 255, 255, 0.4)"
+                        style={{ fontSize: '11px' }}
+                      />
+                      <YAxis 
+                        stroke="rgba(255, 255, 255, 0.4)"
+                        style={{ fontSize: '11px' }}
+                        label={{ value: '$K', angle: -90, position: 'insideLeft', style: { color: 'rgba(255, 255, 255, 0.4)' } }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'rgba(26, 26, 46, 0.95)',
+                          border: '1px solid rgba(132, 204, 22, 0.3)',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          fontSize: '12px',
+                        }}
+                        formatter={(value: any) => typeof value === 'number' ? `$${value.toFixed(1)}K` : value}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="profit"
+                        stroke="#86efac"
+                        strokeWidth={3}
+                        dot={{ fill: '#22c55e', r: 5 }}
+                        activeDot={{ r: 7 }}
+                        isAnimationActive={true}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Summary Stats Row */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '14px' }}>
                   {/* Total Profit */}
                   <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
@@ -769,7 +995,7 @@ const DashboardPage: React.FC = () => {
                   </div>
 
                   {/* Best Day */}
-                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center', borderColor: 'rgba(16, 185, 129, 0.3)' }}>
+                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
                     <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
                       Best Day
                     </div>
@@ -782,7 +1008,7 @@ const DashboardPage: React.FC = () => {
                   </div>
 
                   {/* Worst Day */}
-                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center', borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
                     <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
                       Worst Day
                     </div>
@@ -795,7 +1021,7 @@ const DashboardPage: React.FC = () => {
                   </div>
 
                   {/* Week-over-Week Change */}
-                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center', borderColor: profitMetrics.weekOverWeekChange >= 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)' }}>
+                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
                     <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
                       Trend (1st vs 2nd Half)
                     </div>
@@ -808,83 +1034,136 @@ const DashboardPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Day-over-Day Changes */}
-                <div style={{ ...cardStyle, padding: '14px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '10px' }}>
-                    Daily Changes
+                {/* Day-over-Day Changes - Bar Chart */}
+                <div style={{ 
+                  ...cardStyle, 
+                  padding: '20px',
+                  minHeight: '280px',
+                }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#f97316', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    📈 Daily Changes
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px' }}>
-                    {profitMetrics.dayOverDayChanges.map((change, idx) => (
-                      <div
-                        key={`change-${idx}`}
-                        style={{
-                          ...cardStyle,
-                          padding: '10px',
-                          backgroundColor: change.change >= 0 ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-                          borderColor: change.change >= 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart
+                      data={profitMetrics.dayOverDayChanges.map(change => ({
+                        name: `${change.from}→${change.to}`,
+                        change: parseFloat((change.change / 1000).toFixed(1)),
+                        percent: parseFloat(change.percentChange.toFixed(1)),
+                      }))}
+                      margin={{ top: 10, right: 20, left: 0, bottom: 40 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
+                      <XAxis 
+                        dataKey="name" 
+                        stroke="rgba(255, 255, 255, 0.4)"
+                        angle={-45}
+                        textAnchor="end"
+                        height={80}
+                        style={{ fontSize: '10px' }}
+                      />
+                      <YAxis 
+                        stroke="rgba(255, 255, 255, 0.4)"
+                        style={{ fontSize: '10px' }}
+                        label={{ value: '$K', angle: -90, position: 'insideLeft', style: { color: 'rgba(255, 255, 255, 0.4)' } }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'rgba(26, 26, 46, 0.95)',
+                          border: '1px solid rgba(251, 146, 60, 0.3)',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          fontSize: '12px',
                         }}
-                      >
-                        <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '4px' }}>
-                          {change.from} → {change.to}
-                        </div>
-                        <div style={{ fontSize: '16px', fontWeight: '700', color: change.change >= 0 ? '#86efac' : '#fca5a5', marginBottom: '3px' }}>
-                          {change.change >= 0 ? '+' : ''} ${(change.change / 1000).toFixed(1)}K
-                        </div>
-                        <div style={{ fontSize: '9px', color: change.change >= 0 ? '#86efac' : '#fca5a5' }}>
-                          {change.percentChange >= 0 ? '+' : ''}{change.percentChange.toFixed(1)}%
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                        formatter={(value: any) => typeof value === 'number' ? `$${value.toFixed(1)}K` : value}
+                      />
+                      <Bar
+                        dataKey="change"
+                        fill="#f97316"
+                        radius={[4, 4, 0, 0]}
+                        isAnimationActive={true}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             )}
 
             {/* Alert Correlation Analysis Panel */}
             {alertCount > 0 && (
-              <div style={{ marginTop: '18px' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
-                  Alert Correlation Analysis
+              <div style={{ 
+                marginBottom: '18px',
+                ...cardStyle,
+                borderRadius: '12px',
+                padding: '16px',
+              }}>
+                <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#fca5a5', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  ⚠️ Alert Correlation Analysis
                 </h3>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: '12px',
-                    marginBottom: '12px',
-                  }}
-                >
-                  {/* Total Alerts Card */}
-                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                      Total Alerts
-                    </div>
-                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#ef4444' }}>{alertCount}</div>
+                
+                {/* Alert Distribution Bar */}
+                <div style={{ ...cardStyle, padding: '20px', marginBottom: '14px', minHeight: '120px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '14px' }}>
+                    Alert Status Distribution
                   </div>
-
-                  {/* Correlated Alerts Card */}
-                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center', borderColor: 'rgba(239, 68, 68, 0.3)' }}>
-                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                      Correlated with Low Utilization
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {/* Stacked Bar */}
+                    <div style={{ height: '32px', backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', display: 'flex', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                      <div
+                        style={{
+                          flex: alertsCorrelatedWithLowUtil,
+                          backgroundColor: '#ef4444',
+                          opacity: 0.8,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                        }}
+                      >
+                        {alertsCorrelatedWithLowUtil > 0 && `${alertsCorrelatedWithLowUtil}`}
+                      </div>
+                      <div
+                        style={{
+                          flex: alertCount - alertsCorrelatedWithLowUtil,
+                          backgroundColor: '#60a5fa',
+                          opacity: 0.8,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                        }}
+                      >
+                        {(alertCount - alertsCorrelatedWithLowUtil) > 0 && `${alertCount - alertsCorrelatedWithLowUtil}`}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#f87171' }}>
-                      {alertsCorrelatedWithLowUtil}
-                    </div>
-                    <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '4px' }}>
-                      {alertCorrelationPercentage}% of alerts
-                    </div>
-                  </div>
-
-                  {/* Uncorrelated Alerts Card */}
-                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center', borderColor: 'rgba(96, 165, 250, 0.2)' }}>
-                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                      Uncorrelated (Normal Ops)
-                    </div>
-                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#60a5fa' }}>
-                      {alertCount - alertsCorrelatedWithLowUtil}
-                    </div>
-                    <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '4px' }}>
-                      {((((alertCount - alertsCorrelatedWithLowUtil) / alertCount) * 100)).toFixed(0)}% of alerts
+                    
+                    {/* Legend */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '11px' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <div style={{ width: '12px', height: '12px', backgroundColor: '#ef4444', borderRadius: '2px' }} />
+                        <div>
+                          <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontWeight: '600' }}>
+                            Correlated: {alertsCorrelatedWithLowUtil}
+                          </div>
+                          <div style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '10px' }}>
+                            {alertCorrelationPercentage}% of alerts
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <div style={{ width: '12px', height: '12px', backgroundColor: '#60a5fa', borderRadius: '2px' }} />
+                        <div>
+                          <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontWeight: '600' }}>
+                            Normal Ops: {alertCount - alertsCorrelatedWithLowUtil}
+                          </div>
+                          <div style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '10px' }}>
+                            {((((alertCount - alertsCorrelatedWithLowUtil) / alertCount) * 100)).toFixed(0)}% of alerts
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -900,70 +1179,65 @@ const DashboardPage: React.FC = () => {
                         key={`alert-${idx}`}
                         style={{
                           display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          padding: '10px',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          padding: '12px',
                           backgroundColor: alert.isAtRiskMachine ? 'rgba(239, 68, 68, 0.08)' : 'rgba(96, 165, 250, 0.05)',
-                          borderLeft: `3px solid ${alert.isAtRiskMachine ? '#ef4444' : '#60a5fa'}`,
-                          borderRadius: '4px',
+                          border: `1px solid ${alert.isAtRiskMachine ? 'rgba(239, 68, 68, 0.2)' : 'rgba(96, 165, 250, 0.2)'}`,
+                          borderRadius: '6px',
                           fontSize: '12px',
                         }}
                       >
-                        <div
-                          style={{
-                            minWidth: '70px',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            backgroundColor: alert.isAtRiskMachine ? 'rgba(239, 68, 68, 0.2)' : 'rgba(96, 165, 250, 0.2)',
-                            color: alert.isAtRiskMachine ? '#fca5a5' : '#93c5fd',
-                            fontSize: '11px',
-                            fontWeight: '700',
-                            textAlign: 'center',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {alert.machineId || 'Unknown'}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div
-                            style={{
-                              color: '#e0e0e0',
-                              fontSize: '11px',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {alert.message.substring(alert.message.indexOf(' ') + 1)}
+                        {/* Row 1: Machine ID + Utilization + Status */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                            <div
+                              style={{
+                                padding: '4px 10px',
+                                borderRadius: '4px',
+                                backgroundColor: alert.isAtRiskMachine ? 'rgba(239, 68, 68, 0.2)' : 'rgba(96, 165, 250, 0.2)',
+                                color: alert.isAtRiskMachine ? '#fca5a5' : '#93c5fd',
+                                fontSize: '11px',
+                                fontWeight: '700',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {alert.machineId || 'Unknown'}
+                            </div>
+                            <div style={{ color: '#e0e0e0', fontSize: '12px', fontWeight: '500' }}>
+                              {alert.message.substring(alert.message.indexOf(' ') + 1)}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                            <div
+                              style={{
+                                padding: '4px 8px',
+                                borderRadius: '3px',
+                                backgroundColor: alert.isAtRiskMachine ? 'rgba(239, 68, 68, 0.2)' : 'rgba(96, 165, 250, 0.2)',
+                                color: alert.isAtRiskMachine ? '#fca5a5' : '#93c5fd',
+                                fontSize: '11px',
+                                fontWeight: '600',
+                              }}
+                            >
+                              {(alert.utilization ?? 0).toFixed(1)}%
+                            </div>
+                            {alert.isAtRiskMachine && (
+                              <div
+                                style={{
+                                  fontSize: '9px',
+                                  padding: '3px 6px',
+                                  borderRadius: '2px',
+                                  backgroundColor: 'rgba(239, 68, 68, 0.3)',
+                                  color: '#fca5a5',
+                                  fontWeight: '700',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                AT RISK
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <div
-                          style={{
-                            padding: '4px 8px',
-                            borderRadius: '3px',
-                            backgroundColor: alert.isAtRiskMachine ? 'rgba(239, 68, 68, 0.2)' : 'rgba(96, 165, 250, 0.2)',
-                            color: alert.isAtRiskMachine ? '#fca5a5' : '#93c5fd',
-                            fontSize: '10px',
-                            fontWeight: '600',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {(alert.utilization ?? 0).toFixed(1)}%
-                        </div>
-                        {alert.isAtRiskMachine && (
-                          <div
-                            style={{
-                              fontSize: '9px',
-                              padding: '3px 6px',
-                              borderRadius: '2px',
-                              backgroundColor: 'rgba(239, 68, 68, 0.3)',
-                              color: '#fca5a5',
-                              fontWeight: '700',
-                            }}
-                          >
-                            AT RISK
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>
