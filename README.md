@@ -24,7 +24,6 @@ A comprehensive Business Intelligence and Analysis (BIA) platform for monitoring
 - [Database Setup](#database-setup)
 - [Development Workflow](#development-workflow)
 - [Contributing](#contributing)
-- [Team](#team)
 - [License](#license)
 
 ---
@@ -575,15 +574,6 @@ We welcome contributions! Please follow these steps:
 - Update documentation if needed
 
 ---
-
-## 👥 Team
-
-| Name | Student ID | Role |
-|------|-----------|------|
-| Saugat Shakya | st125986 | Full Stack Developer |
-| Gaurav Karki | st126522 | Backend & Database |
-| Shah Md. Jobayer | st126404 | Data Analytics |
-| Kaung Hein Htet | st126477 | DevOps & Infrastructure |
 
 **Course**: Business Intelligence and Analysis  
 **Institution**: Asian Institute of Technology (AIT)  
