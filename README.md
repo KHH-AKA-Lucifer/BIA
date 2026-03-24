@@ -185,24 +185,25 @@ cd BIA
 
 ```bash
 # Create virtual environment
-python -m venv venv
+python -m venv .venv
 
 # Activate virtual environment
 # On macOS/Linux:
-source venv/bin/activate
+source .venv/bin/activate
 
 # On Windows:
-venv\Scripts\activate
+.venv\Scripts\activate
 ```
 
 #### 2b. Install Python Dependencies
 
 ```bash
+cd backend
 pip install --upgrade pip
 pip install -e .
 ```
 
-This installs all dependencies from `pyproject.toml`:
+This installs all dependencies from `backend/pyproject.toml`:
 - FastAPI, Uvicorn (API framework)
 - SQLAlchemy, Alembic (Database ORM & migrations)
 - Pandas (Data processing)
@@ -210,24 +211,11 @@ This installs all dependencies from `pyproject.toml`:
 
 #### 2c. Configure Environment Variables
 
-Create a `.env` file in the project root:
+Create a backend `.env` file inside `backend/`:
 
 ```bash
-# Database Configuration
-DATABASE_URL=postgresql://user:password@localhost:5432/bia_db
-SQLALCHEMY_DATABASE_URI=postgresql://user:password@localhost:5432/bia_db
-
-# Security
-SECRET_KEY=your-super-secret-key-change-this-in-production
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-# API Configuration
-API_HOST=127.0.0.1
-API_PORT=8000
-
-# Frontend URL (CORS)
-FRONTEND_URL=http://localhost:5173
+cd backend
+cp .env.example .env
 ```
 
 ### 3. Frontend Setup
@@ -239,7 +227,7 @@ cd frontend
 npm install
 
 # Create .env file for frontend
-echo "VITE_API_URL=http://localhost:8000" > .env
+cp .env.example .env
 ```
 
 ### 4. Database Setup
@@ -264,7 +252,8 @@ GRANT ALL PRIVILEGES ON DATABASE bia_db TO bia_user;
 #### 4b. Run Database Migrations
 
 ```bash
-# From project root (with venv activated)
+# From the backend directory
+cd backend
 alembic upgrade head
 ```
 
@@ -282,7 +271,8 @@ Loaded migrations:
 
 ```bash
 # From project root
-source venv/bin/activate  # macOS/Linux or: venv\Scripts\activate (Windows)
+source .venv/bin/activate  # macOS/Linux or: .venv\Scripts\activate (Windows)
+cd backend
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
@@ -297,30 +287,26 @@ cd frontend
 npm run dev
 ```
 
-Frontend will be available at: `http://localhost:5173` (default Vite port)
+Frontend will be available at: `http://localhost:3000`
 
 #### Access the Dashboard
 
 Open your browser and navigate to:
-```
-http://localhost:5173
-```
+`http://localhost:3000`
 
-### Option 2: Docker Compose (All-in-one)
+### Option 2: Docker Compose (Database only)
 
 ```bash
-# Build and start all services
-docker-compose up --build
+# Start PostgreSQL only
+docker compose --env-file backend/.env up -d
 
-# Services will be available at:
-# Frontend: http://localhost:3000
-# Backend: http://localhost:8000
-# Database: localhost:5432
+# Database will be available at:
+# localhost:5440 (default)
 ```
 
 To stop services:
 ```bash
-docker-compose down
+docker compose --env-file backend/.env down
 ```
 
 ---
@@ -329,58 +315,19 @@ docker-compose down
 
 ```
 BIA/
-├── app/                          # Backend application
-│   ├── main.py                   # FastAPI app initialization
-│   ├── api/
-│   │   ├── v1/
-│   │   │   ├── auth.py           # Authentication endpoints
-│   │   │   ├── user.py           # User management
-│   │   │   └── dashboard.py      # Analytics endpoints
-│   │   └── deps.py               # Dependency injection
-│   ├── core/
-│   │   ├── config.py             # Configuration management
-│   │   ├── security.py           # Security utilities
-│   │   └── logging.py            # Logging configuration
-│   ├── db/
-│   │   ├── models.py             # SQLAlchemy models
-│   │   ├── base.py               # Database base class
-│   │   └── sessions.py           # Session management
-│   ├── models/                   # Pydantic models
-│   │   ├── user.py               # User schemas
-│   │   └── auth.py               # Auth schemas
-│   ├── schemas/                  # Request/Response schemas
-│   └── services/                 # Business logic
-│       ├── auth_service.py       # Auth logic
-│       └── databoard_service.py  # Dashboard calculations
-│
-├── frontend/                      # React frontend
+├── backend/
+│   ├── .env.example             # Backend env template
+│   ├── app/                      # FastAPI application
+│   ├── alembic/                  # Database migrations
+│   ├── alembic.ini               # Alembic config
+│   ├── pyproject.toml            # Python dependencies
+│   └── poetry.lock               # Locked Python packages
+├── frontend/                     # React frontend
 │   ├── src/
-│   │   ├── pages/
-│   │   │   └── DashboardPage.tsx # Main dashboard (1200+ lines)
-│   │   ├── components/
-│   │   │   └── KPICard.tsx       # Reusable KPI card
-│   │   ├── context/
-│   │   │   └── AuthContext.tsx   # Auth state management
-│   │   ├── hooks/
-│   │   │   └── useDashboard.ts   # Dashboard data fetching
-│   │   ├── App.tsx
-│   │   └── main.tsx
+│   ├── .env.example
 │   ├── package.json
 │   └── vite.config.ts
-│
-├── alembic/                       # Database migrations
-│   ├── versions/
-│   │   ├── e24ffe6eab49_add_role_to_users.py
-│   │   └── ef75aaafe6a0_create_users_table.py
-│   └── env.py
-│
-├── app/data/
-│   └── vending_machine_sales.csv # Sample dataset
-│
-├── pyproject.toml                # Python dependencies
-├── docker-compose.yml            # Container orchestration
-├── alembic.ini                   # Migration config
-├── proposal.txt                  # Project proposal
+├── docker-compose.yml            # PostgreSQL service
 └── README.md                     # This file
 ```
 
@@ -426,30 +373,40 @@ Interactive API documentation available at: `http://localhost:8000/docs`
 
 ## ⚙️ Configuration
 
-### Backend Configuration (app/core/config.py)
+### Backend Configuration (`backend/app/core/config.py`)
 
-```python
-# Key settings
-DEBUG = False                           # Set to True in development
-DATABASE_URL = "postgresql://..."       # Your DB connection string
-SECRET_KEY = "your-secret-key"          # Change in production
-ALGORITHM = "HS256"                     # JWT algorithm
-ACCESS_TOKEN_EXPIRE_MINUTES = 30        # Token TTL
+```env
+APP_NAME=Data Dashboard Backend
+APP_ENV=development
+API_V1_STR=/api/v1
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5440
+POSTGRES_DB=datadashboard
+POSTGRES_USER=your_postgres_user
+POSTGRES_PASSWORD=your_postgres_password
+JWT_SECRET_KEY=change-me
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+LOG_LEVEL=INFO
 ```
 
-### Frontend Configuration (.env)
+### Frontend Configuration (`frontend/.env`)
 
 ```
 VITE_API_URL=http://localhost:8000
-VITE_APP_NAME=BIA Dashboard
+VITE_API_V1=/api/v1
 ```
 
 ### Database Configuration
 
-Edit `.env` to change database connection:
+Edit `backend/.env` to change database connection settings:
 
-```
-DATABASE_URL=postgresql://username:password@host:port/database_name
+```env
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5440
+POSTGRES_DB=datadashboard
+POSTGRES_USER=your_postgres_user
+POSTGRES_PASSWORD=your_postgres_password
 ```
 
 ---
@@ -462,7 +419,7 @@ The project includes sample vending machine sales data:
 
 ```bash
 # Load sample CSV data (if automation exists)
-# Manual import: app/data/vending_machine_sales.csv
+# Manual import: backend/app/data/vending_machine_sales.csv
 ```
 
 ### Database Schema Highlights
@@ -518,10 +475,12 @@ chore(scope): dependency updates
 ### 3. Testing
 
 ```bash
-# Backend tests (configure in pyproject.toml)
+# Backend tests (configure in backend/pyproject.toml)
+cd backend
 pytest
 
 # Frontend tests (configure in package.json)
+cd frontend
 npm test
 ```
 
@@ -529,9 +488,11 @@ npm test
 
 ```bash
 # Backend linting
+cd backend
 flake8 app/
 
 # Frontend linting
+cd frontend
 npm run lint
 ```
 
@@ -541,6 +502,7 @@ npm run lint
 ```bash
 # No separate build needed for FastAPI
 # Just ensure all dependencies are installed
+cd backend
 pip install -e .
 ```
 
@@ -597,6 +559,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 lsof -ti:8000 | xargs kill -9
 
 # Or use different port
+cd backend
 python -m uvicorn app.main:app --port 8001
 ```
 
@@ -605,13 +568,13 @@ python -m uvicorn app.main:app --port 8001
 # Check PostgreSQL is running
 psql -U postgres  # Should connect successfully
 
-# Verify DATABASE_URL in .env
-# Format: postgresql://user:password@localhost:5432/database
+# Verify POSTGRES_* values in backend/.env
 ```
 
 **Migration errors**
 ```bash
 # Reset migrations (⚠️ WARNING: Deletes all data)
+cd backend
 alembic downgrade base
 alembic upgrade head
 ```
