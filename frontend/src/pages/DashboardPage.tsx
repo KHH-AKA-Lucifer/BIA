@@ -153,8 +153,10 @@ const DashboardPage: React.FC = () => {
   // Location grouping with analytics
   const getLocationAnalytics = () => {
     if (!data) return []
+
+    const revenueByLocation = data.all_locations_revenue || data.top_locations
     
-    const locationRevenue = Object.entries(data.top_locations).map(([location, revenue]) => ({
+    const locationRevenue = Object.entries(revenueByLocation).map(([location, revenue]) => ({
       location,
       revenue: revenue as number,
     }))
@@ -1588,67 +1590,82 @@ const DashboardPage: React.FC = () => {
                   </defs>
                   <rect width="100%" height="100%" fill="url(#grid-bg)" />
 
-                  {/* Location bubbles */}
-                  {data?.map.map((location, idx) => {
-                    const revenue = (data.top_locations[location.location] || 0) / 1000
-                    const maxRevenue = Math.max(...Object.values(data.top_locations).map((r: any) => r / 1000))
-                    const size = Math.max(25, (revenue / maxRevenue) * 70)
-                    
-                    // Better positioning: spread locations across the canvas
+                  {/* Location bubbles centered on real lat/lng from API */}
+                  {(() => {
+                    const mapData = data?.map || []
+                    const validMapData = mapData.filter((loc: any) => Number.isFinite(loc.lat) && Number.isFinite(loc.lon))
+                    if (validMapData.length === 0) return null
+
+                    const lats = validMapData.map((loc: any) => loc.lat)
+                    const lons = validMapData.map((loc: any) => loc.lon)
+                    const latMin = Math.min(...lats)
+                    const latMax = Math.max(...lats)
+                    const lonMin = Math.min(...lons)
+                    const lonMax = Math.max(...lons)
+
                     const svgWidth = 450
                     const svgHeight = 380
-                    const padding = 60
-                    const cols = 2
-                    const row = Math.floor(idx / cols)
-                    const col = idx % cols
-                    
-                    const x = padding + col * (svgWidth - padding * 2) / cols + (svgWidth - padding * 2) / (cols * 2)
-                    const y = padding + row * (svgHeight - padding * 2) / Math.ceil(data.map.length / cols) + (svgHeight - padding * 2) / (Math.ceil(data.map.length / cols) * 2)
+                    const padding = 40
 
-                    return (
-                      <g key={`loc-${idx}`}>
-                        <circle
-                          cx={x}
-                          cy={y}
-                          r={size}
-                          fill={`hsl(${idx * 85}, 70%, 50%)`}
-                          opacity="0.65"
-                          style={{ transition: 'all 0.3s ease', cursor: 'pointer' }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.setAttribute('r', `${size * 1.3}`)
-                            e.currentTarget.setAttribute('opacity', '0.95')
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.setAttribute('r', `${size}`)
-                            e.currentTarget.setAttribute('opacity', '0.65')
-                          }}
-                        />
-                        <text
-                          x={x}
-                          y={y - 8}
-                          textAnchor="middle"
-                          fontSize="12"
-                          fontWeight="700"
-                          fill="#fff"
-                          pointerEvents="none"
-                        >
-                          ${revenue.toFixed(0)}K
-                        </text>
-                        <text
-                          x={x}
-                          y={y + 6}
-                          textAnchor="middle"
-                          fontSize="10"
-                          fontWeight="500"
-                          fill="#fff"
-                          pointerEvents="none"
-                          opacity="0.8"
-                        >
-                          {location.location.substring(0, 12)}
-                        </text>
-                      </g>
-                    )
-                  })}
+                    const project = (lat: number, lon: number) => {
+                      const x = latMin === latMax
+                        ? svgWidth / 2
+                        : padding + ((lon - lonMin) / (lonMax - lonMin)) * (svgWidth - padding * 2)
+
+                      const y = lonMin === lonMax
+                        ? svgHeight / 2
+                        : svgHeight - (padding + ((lat - latMin) / (latMax - latMin)) * (svgHeight - padding * 2))
+
+                      return { x, y }
+                    }
+
+                    const maxRevenue = Math.max(
+                      ...Object.values(data?.all_locations_revenue || data?.top_locations || {}).map((r: any) => (r || 0) / 1000),
+                    ) || 1
+
+                    return validMapData.map((location: any, idx: number) => {
+                      const revenue = (
+                        data?.all_locations_revenue?.[location.location]
+                        ?? data?.top_locations?.[location.location]
+                        ?? 0
+                      ) / 1000
+                      const size = Math.max(8, Math.min(35, (revenue / maxRevenue) * 40))
+
+                      const { x, y } = project(location.lat, location.lon)
+
+                      return (
+                        <g key={`loc-${idx}`}>
+                          <circle
+                            cx={x}
+                            cy={y}
+                            r={size}
+                            fill={`hsl(${(idx * 54) % 360}, 70%, 50%)`}
+                            opacity="0.75"
+                            style={{ transition: 'all 0.3s ease', cursor: 'pointer' }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.setAttribute('r', `${size * 1.3}`)
+                              e.currentTarget.setAttribute('opacity', '0.95')
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.setAttribute('r', `${size}`)
+                              e.currentTarget.setAttribute('opacity', '0.75')
+                            }}
+                          />
+                          <text
+                            x={x}
+                            y={y - size - 6}
+                            textAnchor="middle"
+                            fontSize="10"
+                            fontWeight="600"
+                            fill="#fff"
+                            pointerEvents="none"
+                          >
+                            {location.location}
+                          </text>
+                        </g>
+                      )
+                    })
+                  })()}
                 </svg>
               </div>
               <div style={{ marginTop: '12px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)' }}>
@@ -1663,7 +1680,11 @@ const DashboardPage: React.FC = () => {
               </h3>
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 {data?.map.map((location, idx) => {
-                  const revenue = (data.top_locations[location.location] || 0) / 1000
+                  const revenue = (
+                    data.all_locations_revenue?.[location.location]
+                    ?? data.top_locations[location.location]
+                    ?? 0
+                  ) / 1000
                   const isTopLocation = location.location in data.top_locations
                   return (
                     <div
