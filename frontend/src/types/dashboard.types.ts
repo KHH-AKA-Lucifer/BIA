@@ -8,6 +8,7 @@ export interface DashboardSummary {
     values: number[]
   }
   top_locations: Record<string, number>
+  all_locations_revenue: Record<string, number>
   machine_utilization: Record<string, number>
   alerts: string[]
   map: Array<{
