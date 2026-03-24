@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { AlertCircle, Mail, Lock, Eye, EyeOff, Loader } from 'lucide-react'
@@ -10,21 +10,37 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [localError, setLocalError] = useState('')
+  const [persistedError, setPersistedError] = useState('')
+
+  // Check for persisted errors on mount
+  useEffect(() => {
+    const stored = sessionStorage.getItem('LOGIN_ERROR')
+    if (stored) {
+      setPersistedError(stored)
+      sessionStorage.removeItem('LOGIN_ERROR')
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLocalError('')
+    setPersistedError('')
 
     if (!email || !password) {
-      setLocalError('Email and password are required')
+      const err = 'Email and password are required'
+      setLocalError(err)
+      sessionStorage.setItem('LOGIN_ERROR', err)
       return
     }
 
     try {
       await login(email, password)
+      sessionStorage.removeItem('LOGIN_ERROR')
       navigate('/dashboard')
     } catch (err: any) {
-      setLocalError(err.response?.data?.detail || 'Login failed. Please try again.')
+      const errorMsg = err.response?.data?.detail || err.message || 'Login failed. Please try again.'
+      setLocalError(errorMsg)
+      sessionStorage.setItem('LOGIN_ERROR', errorMsg)
     }
   }
 
@@ -141,7 +157,7 @@ const LoginPage: React.FC = () => {
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3), 0 0 1px rgba(59, 130, 246, 0.1) inset'
         }}>
           {/* Error Alert */}
-          {(error || localError) && (
+          {(error || localError || persistedError) && (
             <div style={{
               marginBottom: '1.5rem',
               padding: '0.875rem 1rem',
@@ -165,7 +181,7 @@ const LoginPage: React.FC = () => {
                 color: '#fca5a5',
                 margin: 0
               }}>
-                {error || localError}
+                {error || localError || persistedError}
               </p>
             </div>
           )}
