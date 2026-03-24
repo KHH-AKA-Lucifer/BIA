@@ -1,9 +1,11 @@
 import uvicorn
 import logging 
+import os
 from sqlalchemy import text 
 from sqlalchemy.orm import Session
 from app.db.sessions  import get_db
 from fastapi import FastAPI, Depends  
+from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from contextlib import asynccontextmanager
 from app.core.logging import setup_logging
@@ -13,6 +15,19 @@ from app.api.v1.dashboard import router as dashboard_router
 
 setup_logging()
 logger = logging.getLogger("app")
+
+# CORS configuration based on environment
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+if ENVIRONMENT == "production":
+    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").split(",")
+else:
+    # Development: allow localhost variants
+    ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+    ]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,6 +45,15 @@ app = FastAPI(
     title=settings.APP_NAME,
     #debug=settings.DEBUG, # security reason
     lifespan=lifespan
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 app.include_router(auth_router, prefix=settings.API_V1_STR)
