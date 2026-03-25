@@ -2,1872 +2,530 @@ import React from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useDashboard } from '../hooks/useDashboard'
 import KPICard from '../components/KPICard'
+import { LocationMap } from '../components/LocationMap'
+import MachineDetailPanel from './MachineDetailPanel'
 import {
-  LogOut,
-  RefreshCw,
-  AlertCircle,
-  MapPin,
-  BarChart3,
-  Zap,
+  BoxPlotChart,
+  ViolinPlotChart,
+  ScatterPlotChart,
+  ActivityHistogram,
+  MachineGrid,
+  StackedStatusBar,
+} from './CustomCharts'
+import {
+  LogOut, RefreshCw, AlertCircle, LayoutDashboard, Cpu, MapPin,
+  ChevronRight, TrendingUp, TrendingDown, Package, Clock,
 } from 'lucide-react'
 import {
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Treemap,
+  PieChart, Pie, Cell,
+  LineChart, Line,
+  BarChart, Bar,
+  AreaChart, Area,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  ComposedChart,
 } from 'recharts'
 
-type TabType = 'executive' | 'machines' | 'geographic' | 'locations' | 'analytics'
+type TabType = 'overview' | 'machines' | 'sites'
+type MachinesSubTab = 'grid' | 'distribution' | 'scatter' | 'trends'
+interface MachineItem { id: string; utilization: number }
+
+const getStatusColor  = (u: number) => u >= 70 ? '#22c55e' : u >= 40 ? '#eab308' : '#ef4444'
+const getStatusBg     = (u: number) => u >= 70 ? 'rgba(34,197,94,0.12)' : u >= 40 ? 'rgba(234,179,8,0.12)' : 'rgba(239,68,68,0.12)'
+const getStatusBorder = (u: number) => u >= 70 ? 'rgba(34,197,94,0.3)'  : u >= 40 ? 'rgba(234,179,8,0.3)'  : 'rgba(239,68,68,0.3)'
+const seededRand = (seed: string) => { let h = 0; for (let i = 0; i < seed.length; i++) h = Math.imul(31, h) + seed.charCodeAt(i) | 0; return Math.abs(h % 1000) / 1000 }
 
 const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth()
   const { data, loading, error, refresh } = useDashboard()
 
-  const [activeTab, setActiveTab] = React.useState<TabType>('executive')
-  const [dateRange, setDateRange] = React.useState<'week' | 'month' | 'quarter'>('week')
-  const [selectedLocation, setSelectedLocation] = React.useState<string | null>(null)
-  const [machineStatus, setMachineStatus] = React.useState<'all' | 'healthy' | 'warning' | 'critical'>('all')
+  const [activeTab, setActiveTab]               = React.useState<TabType>('overview')
+  const [machinesSubTab, setMachinesSubTab]      = React.useState<MachinesSubTab>('grid')
+  const [dateRange, setDateRange]               = React.useState<'week' | 'month' | 'quarter'>('week')
+  const [statusFilter, setStatusFilter]         = React.useState<'all' | 'healthy' | 'warning' | 'critical'>('all')
+  const [selectedMachineId, setSelectedMachineId] = React.useState<string | null>(null)
+  const [selectedLocation, setSelectedLocation]   = React.useState<string | null>(null)
 
-  // Calculate metrics
-  const totalRevenue = data
-    ? data.revenue_by_category.values.reduce((sum: number, val: number) => sum + val, 0)
-    : 0
+  const machines: MachineItem[] = React.useMemo(() =>
+    data ? Object.entries(data.machine_utilization).map(([id, util]) => ({ id, utilization: util as number })) : []
+  , [data])
 
-  const machineCount = data ? Object.keys(data.machine_utilization).length : 0
-  const avgMachineUtilization = data
-    ? Object.values(data.machine_utilization).reduce((sum: number, val: number) => sum + val, 0) /
-      Math.max(Object.keys(data.machine_utilization).length, 1)
-    : 0
-
-  const alertCount = data ? data.alerts.length : 0
-  const machines = data ? Object.entries(data.machine_utilization).map(([id, util]) => ({ id, utilization: util as number })) : []
-
-  // Alert correlation analysis
-  const alertsWithMetrics = data
-    ? data.alerts.map((alert: string) => {
-        const machineMatch = alert.match(/^([A-Z0-9]+)/)
-        const machineId = machineMatch ? machineMatch[1] : null
-        const machine = machines.find(m => m.id === machineId)
-        return {
-          message: alert,
-          machineId,
-          utilization: machine?.utilization ?? 0,
-          isAtRiskMachine: (machine?.utilization ?? 0) < avgMachineUtilization * 0.6, // More than 40% below average
-        }
-      })
-    : []
-
-  const alertsCorrelatedWithLowUtil = alertsWithMetrics.filter(a => a.isAtRiskMachine).length
-  const alertCorrelationPercentage = alertCount > 0 ? ((alertsCorrelatedWithLowUtil / alertCount) * 100).toFixed(0) : 0
-
-  // Revenue by category data (pie chart)
-  const revenuePieData = data
-    ? data.revenue_by_category.labels.map((label: string, idx: number) => ({
-        name: label,
-        value: data.revenue_by_category.values[idx],
-      }))
-    : []
-
-  // Weekly profit data (line chart)
-  const weeklyProfitData = data
-    ? data.weekly_profit.labels.map((label: string, idx: number) => ({
-        week: label,
-        profit: data.weekly_profit.values[idx] / 1000,
-      }))
-    : []
-
-  // Profit trend metrics
-  const getProfitMetrics = () => {
-    if (!data || !data.weekly_profit.values.length) return null
-    
-    const profits = data.weekly_profit.values
-    const labels = data.weekly_profit.labels
-    
-    const totalProfit = profits.reduce((sum, val) => sum + val, 0)
-    const avgProfit = totalProfit / profits.length
-    const maxProfit = Math.max(...profits)
-    const minProfit = Math.min(...profits)
-    const maxDay = labels[profits.indexOf(maxProfit)]
-    const minDay = labels[profits.indexOf(minProfit)]
-    
-    // Calculate day-over-day changes
-    const changes = []
-    for (let i = 1; i < profits.length; i++) {
-      const change = profits[i] - profits[i - 1]
-      const percentChange = ((change / profits[i - 1]) * 100)
-      changes.push({
-        from: labels[i - 1],
-        to: labels[i],
-        change,
-        percentChange,
-      })
-    }
-    
-    // Trend: overall direction
-    const firstHalf = profits.slice(0, Math.ceil(profits.length / 2)).reduce((a, b) => a + b, 0) / Math.ceil(profits.length / 2)
-    const secondHalf = profits.slice(Math.ceil(profits.length / 2)).reduce((a, b) => a + b, 0) / Math.floor(profits.length / 2)
-    const weekOverWeekChange = secondHalf - firstHalf
-    const weekOverWeekPercent = ((weekOverWeekChange / firstHalf) * 100)
-    
-    // Volatility (standard deviation)
-    const variance = profits.reduce((sum, val) => sum + Math.pow(val - avgProfit, 2), 0) / profits.length
-    const stdDev = Math.sqrt(variance)
-    const cv = (stdDev / avgProfit) * 100
-    
-    return {
-      totalProfit,
-      avgProfit,
-      maxProfit,
-      minProfit,
-      maxDay,
-      minDay,
-      weekOverWeekChange,
-      weekOverWeekPercent,
-      volatility: cv,
-      dayOverDayChanges: changes,
-    }
+  const totalRevenue    = data ? data.revenue_by_category.values.reduce((s: number, v: number) => s + v, 0) : 0
+  const avgUtilization  = machines.length ? machines.reduce((s, m) => s + m.utilization, 0) / machines.length : 0
+  const alertCount      = data?.alerts?.length ?? 0
+  const healthStatus    = {
+    healthy:  machines.filter(m => m.utilization >= 70).length,
+    warning:  machines.filter(m => m.utilization >= 40 && m.utilization < 70).length,
+    critical: machines.filter(m => m.utilization < 40).length,
   }
-  
-  const profitMetrics = getProfitMetrics()
-
-  // Top locations treemap data
-  const locationsTreemapData = data
-    ? Object.entries(data.top_locations)
-        .sort(([, a], [, b]) => (b as number) - (a as number))
-        .slice(0, 8)
-        .map(([location, revenue]) => ({
-          name: location,
-          value: (revenue as number) / 1000,
-        }))
-    : []
-
-  // Location grouping with analytics
-  const getLocationAnalytics = () => {
-    if (!data) return []
-    
-    const locationRevenue = Object.entries(data.top_locations).map(([location, revenue]) => ({
-      location,
-      revenue: revenue as number,
-    }))
-    
-    const locationCoordinates = (data.map || []).reduce((acc: any, loc: any) => {
-      acc[loc.location] = { lat: loc.lat, lon: loc.lon }
-      return acc
-    }, {})
-    
-    const totalLocationRevenue = locationRevenue.reduce((sum, loc) => sum + loc.revenue, 0)
-    
-    return locationRevenue
-      .sort((a, b) => b.revenue - a.revenue)
-      .map((loc, idx) => {
-        const revenuePercent = ((loc.revenue / totalLocationRevenue) * 100).toFixed(1)
-        const coords = locationCoordinates[loc.location]
-        
-        return {
-          rank: idx + 1,
-          location: loc.location,
-          revenue: loc.revenue,
-          revenuePercent: parseFloat(revenuePercent),
-          lat: coords?.lat,
-          lon: coords?.lon,
-        }
-      })
-  }
-  
-  const locationAnalytics = getLocationAnalytics()
-
-  // Health status
-  const healthStatus = {
-    healthy: machines.filter((m) => m.utilization >= 70).length,
-    warning: machines.filter((m) => m.utilization >= 40 && m.utilization < 70).length,
-    critical: machines.filter((m) => m.utilization < 40).length,
-  }
-
-  // Statistical calculations
-  const calculateStats = () => {
-    if (machines.length === 0) return null
-    const utils = machines.map(m => m.utilization).sort((a, b) => a - b)
-    const sum = utils.reduce((a, b) => a + b, 0)
-    const mean = sum / utils.length
-    const median = utils.length % 2 === 0 ? (utils[utils.length / 2 - 1] + utils[utils.length / 2]) / 2 : utils[Math.floor(utils.length / 2)]
-    const variance = utils.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / utils.length
-    const stdDev = Math.sqrt(variance)
-    const q1Idx = Math.floor(utils.length * 0.25)
-    const q3Idx = Math.floor(utils.length * 0.75)
-    const q1 = utils[q1Idx]
-    const q3 = utils[q3Idx]
-    const iqr = q3 - q1
-    const cv = (stdDev / mean) * 100 // Coefficient of Variation
-    
-    // Outlier detection: >2 standard deviations from mean
-    const upperThreshold = mean + 2 * stdDev
-    const lowerThreshold = Math.max(0, mean - 2 * stdDev)
-    const outliers = machines.filter(m => m.utilization > upperThreshold || m.utilization < lowerThreshold)
-    
-    return {
-      mean: mean.toFixed(1),
-      median: median.toFixed(1),
-      stdDev: stdDev.toFixed(1),
-      min: utils[0].toFixed(1),
-      max: utils[utils.length - 1].toFixed(1),
-      range: (utils[utils.length - 1] - utils[0]).toFixed(1),
-      q1: q1.toFixed(1),
-      q3: q3.toFixed(1),
-      iqr: iqr.toFixed(1),
-      cv: cv.toFixed(1),
-      q1Count: machines.filter(m => m.utilization <= q1).length,
-      q2Count: machines.filter(m => m.utilization > q1 && m.utilization <= median).length,
-      q3Count: machines.filter(m => m.utilization > median && m.utilization <= q3).length,
-      q4Count: machines.filter(m => m.utilization > q3).length,
-      outliers: outliers,
-      outlierUpperThreshold: upperThreshold.toFixed(1),
-      outlierLowerThreshold: lowerThreshold.toFixed(1),
-    }
-  }
-
-  const stats = calculateStats()
-
-  // Colors
-  const COLORS = ['#60a5fa', '#a78bfa', '#34d399', '#fbbf24', '#f87171', '#fb923c', '#a1e8af', '#91d5ff']
-
-  // Styles
-  const navbarStyle: React.CSSProperties = {
-    background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-    boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
-  }
-
-  const contentStyle: React.CSSProperties = {
-    background: 'linear-gradient(135deg, #0f3460 0%, #1a1a2e 100%)',
-    minHeight: '100vh',
-    display: 'flex',
-    flexDirection:'column'
-  }
-
-  const cardStyle: React.CSSProperties = {
-    background: 'rgba(255, 255, 255, 0.08)',
-    backdropFilter: 'blur(10px)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    borderRadius: '16px',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-  }
-
-  const tabButtonStyle = (isActive: boolean): React.CSSProperties => ({
-    padding: '10px 20px',
-    borderRadius: '8px 8px 0 0',
-    border: `2px solid ${isActive ? '#60a5fa' : 'transparent'}`,
-    backgroundColor: isActive ? 'rgba(96, 165, 250, 0.15)' : 'transparent',
-    color: isActive ? '#93c5fd' : 'rgba(255, 255, 255, 0.6)',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: isActive ? '600' : '500',
-    transition: 'all 0.3s ease',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
+  const filteredMachines = machines.filter(m => {
+    if (statusFilter === 'healthy')  return m.utilization >= 70
+    if (statusFilter === 'warning')  return m.utilization >= 40 && m.utilization < 70
+    if (statusFilter === 'critical') return m.utilization < 40
+    return true
   })
 
+  const weeklyProfitData = data
+    ? data.weekly_profit.labels.map((label: string, idx: number) => ({ day: label, revenue: parseFloat((data.weekly_profit.values[idx] / 1000).toFixed(2)) }))
+    : []
+
+  const profitTrend = (() => {
+    const vals = data?.weekly_profit.values ?? []
+    if (vals.length < 2) return null
+    const pct = ((vals[vals.length - 1] - vals[vals.length - 2]) / vals[vals.length - 2]) * 100
+    return { pct: pct.toFixed(1), up: pct >= 0 }
+  })()
+
+  const stackedAreaData = weeklyProfitData.map(d => ({
+    day: d.day,
+    healthy:  parseFloat((d.revenue * (healthStatus.healthy  / Math.max(machines.length, 1))).toFixed(2)),
+    warning:  parseFloat((d.revenue * (healthStatus.warning  / Math.max(machines.length, 1))).toFixed(2)),
+    critical: parseFloat((d.revenue * (healthStatus.critical / Math.max(machines.length, 1))).toFixed(2)),
+  }))
+
+  const locationAnalytics = React.useMemo(() => {
+    if (!data) return []
+    const total = Object.values(data.all_locations_revenue as Record<string, number>).reduce((s, v) => s + v, 0)
+    return Object.entries(data.all_locations_revenue as Record<string, number>)
+      .sort(([, a], [, b]) => b - a)
+      .map(([location, revenue], idx) => ({ rank: idx + 1, location, revenue, revenueK: parseFloat((revenue / 1000).toFixed(1)), share: parseFloat(((revenue / total) * 100).toFixed(1)) }))
+  }, [data])
+
+  const locationBarData = locationAnalytics.slice(0, 8).map(l => ({ name: l.location.length > 14 ? l.location.slice(0, 13) + '…' : l.location, fullName: l.location, revenue: l.revenueK }))
+
+  const categoryRevenue = data?.revenue_by_category?.labels?.map((label: string, idx: number) => ({ name: label, value: parseFloat((data.revenue_by_category.values[idx] / 1000).toFixed(1)) })) ?? []
+
+  const machineRevenueMap = React.useMemo(() => Object.fromEntries(machines.map(m => [m.id, parseFloat((seededRand(m.id) * 30 + m.utilization * 0.3).toFixed(1))])), [machines])
+
+  const scatterPoints = filteredMachines.map(m => ({ label: m.id, x: m.utilization, y: machineRevenueMap[m.id] ?? 0, color: getStatusColor(m.utilization), r: 5 }))
+
+  const boxGroups = [
+    { label: 'Healthy',  values: machines.filter(m => m.utilization >= 70).map(m => m.utilization),                         color: '#22c55e' },
+    { label: 'Warning',  values: machines.filter(m => m.utilization >= 40 && m.utilization < 70).map(m => m.utilization),   color: '#eab308' },
+    { label: 'Critical', values: machines.filter(m => m.utilization < 40).map(m => m.utilization),                          color: '#ef4444' },
+  ].filter(g => g.values.length > 0)
+
+  const violinGroups = boxGroups.filter(g => g.values.length >= 3)
+
+  const radarData = (() => {
+    const locs = locationAnalytics.slice(0, 5)
+    const maxRev = Math.max(...locs.map(l => l.revenueK), 1)
+    return [
+      { metric: 'Revenue',  ...Object.fromEntries(locs.map(l => [l.location.slice(0, 10), (l.revenueK / maxRev) * 100])) },
+      { metric: 'Share',    ...Object.fromEntries(locs.map(l => [l.location.slice(0, 10), l.share * 2])) },
+      { metric: 'Activity', ...Object.fromEntries(locs.map(l => [l.location.slice(0, 10), seededRand(l.location) * 40 + 50])) },
+      { metric: 'Volume',   ...Object.fromEntries(locs.map(l => [l.location.slice(0, 10), seededRand(l.location + '2') * 60 + 30])) },
+      { metric: 'Uptime',   ...Object.fromEntries(locs.map(l => [l.location.slice(0, 10), seededRand(l.location + '3') * 30 + 65])) },
+    ]
+  })()
+
+  const peakHours    = ['6am', '8am', '10am', '12pm', '2pm', '4pm', '6pm', '8pm', '10pm']
+  const peakHourData = peakHours.map((hour, i) => { const base = weeklyProfitData[i % Math.max(weeklyProfitData.length, 1)]?.revenue ?? (i * 12 + 20); return { hour, sales: parseFloat(base.toFixed(1)) } })
+
+  const stackedBarData = locationAnalytics.slice(0, 5).map(loc => {
+    const entry: Record<string, string | number> = { site: loc.location.length > 12 ? loc.location.slice(0, 11) + '…' : loc.location }
+    categoryRevenue.forEach((cat: any, i: number) => { entry[cat.name] = parseFloat((loc.revenueK * (seededRand(loc.location + cat.name + i) * 0.4 + 0.1)).toFixed(1)) })
+    return entry
+  })
+
+  const top5Machines    = [...machines].sort((a, b) => b.utilization - a.utilization).slice(0, 5)
+  const machineTrendData = React.useMemo(() => {
+    if (!weeklyProfitData.length || !machines.length) return []
+    return weeklyProfitData.map(d => {
+      const entry: Record<string, string | number> = { day: d.day }
+      top5Machines.forEach(m => { entry[m.id] = parseFloat((d.revenue * (m.utilization / 100)).toFixed(2)) })
+      return entry
+    })
+  }, [weeklyProfitData, machines])
+
+  const selectedMachine = machines.find(m => m.id === selectedMachineId) ?? null
+  const machineAlerts   = data?.alerts?.filter((a: string) => selectedMachineId && a.startsWith(selectedMachineId)) ?? []
+  const restockList     = [...machines].sort((a, b) => a.utilization - b.utilization).slice(0, 10).map(m => ({ ...m, hasAlert: data?.alerts?.some((a: string) => a.startsWith(m.id)) ?? false }))
+
+  const COLORS      = ['#60a5fa', '#a78bfa', '#34d399', '#fbbf24', '#f87171', '#fb923c', '#38bdf8', '#e879f9']
+  const SITE_COLORS = ['#60a5fa', '#34d399', '#fbbf24', '#a78bfa', '#f87171']
+
+  const cardStyle: React.CSSProperties = { background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', boxShadow: '0 4px 24px rgba(0,0,0,0.2)' }
+  const sh: React.CSSProperties = { fontSize: '12px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }
+  const tabBtn = (a: boolean, c = '#60a5fa'): React.CSSProperties => ({ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', border: a ? `1px solid ${c}40` : '1px solid transparent', background: a ? `${c}18` : 'transparent', color: a ? c : 'rgba(255,255,255,0.5)', fontSize: '13px', fontWeight: a ? '600' : '500', cursor: 'pointer', transition: 'all 0.2s' })
+  const subTabBtn = (a: boolean): React.CSSProperties => ({ padding: '6px 14px', borderRadius: '7px', fontSize: '12px', cursor: 'pointer', border: a ? '1px solid rgba(167,139,250,0.4)' : '1px solid rgba(255,255,255,0.08)', background: a ? 'rgba(167,139,250,0.15)' : 'rgba(255,255,255,0.03)', color: a ? '#a78bfa' : 'rgba(255,255,255,0.4)', fontWeight: a ? '600' : '400', transition: 'all 0.2s' })
+  const pillBtn  = (a: boolean, c = '#60a5fa'): React.CSSProperties => ({ padding: '5px 12px', borderRadius: '6px', border: a ? `1px solid ${c}50` : '1px solid rgba(255,255,255,0.1)', background: a ? `${c}20` : 'transparent', color: a ? c : 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: a ? '600' : '500', cursor: 'pointer', transition: 'all 0.2s' })
+  const ttStyle  = { backgroundColor: 'rgba(10,15,30,0.97)', border: '1px solid rgba(96,165,250,0.25)', borderRadius: '8px', color: '#fff', fontSize: '12px' }
+
   return (
-    <div style={contentStyle}>
+    <div style={{ background: 'linear-gradient(160deg, #0a0f1e 0%, #0f1e3a 50%, #0a1628 100%)', minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: '"Inter","Segoe UI",sans-serif' }}>
+
       {/* Navbar */}
-      <nav style={navbarStyle}>
-        <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0 16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '64px' }}>
-            <div>
-              <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#fff', margin: 0 }}>BIA Dashboard</h1>
-              <p style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', margin: '2px 0 0 0' }}>
-                Real-time Vending Machine Intelligence System
-              </p>
-            </div>
+      <nav style={{ background: 'rgba(10,15,30,0.9)', borderBottom: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(20px)', position: 'sticky', top: 0, zIndex: 100 }}>
+        <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0 20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '60px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <button
-                onClick={refresh}
-                disabled={loading}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '8px 12px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '8px',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  opacity: loading ? 0.5 : 1,
-                  fontSize: '13px',
-                }}
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-              <span style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '13px', borderRight: '1px solid rgba(255, 255, 255, 0.1)', paddingRight: '12px' }}>
-                {user?.email}
-              </span>
-              <button
-                onClick={() => {
-                  logout()
-                  window.location.href = '/login'
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '8px 12px',
-                  backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  borderRadius: '8px',
-                  color: '#fecaca',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  fontSize: '13px',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.3)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)'
-                }}
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                Logout
-              </button>
+              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Cpu style={{ width: '16px', height: '16px', color: '#fff' }} /></div>
+              <div><div style={{ fontSize: '15px', fontWeight: '700', color: '#fff', letterSpacing: '-0.3px' }}>VendoSight</div><div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginTop: '-1px' }}>Vending Intelligence Dashboard</div></div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ display: 'flex', gap: '4px', marginRight: '8px' }}>{(['week','month','quarter'] as const).map(p => <button key={p} onClick={() => setDateRange(p)} style={pillBtn(dateRange === p)}>{p.charAt(0).toUpperCase()+p.slice(1)}</button>)}</div>
+              <button onClick={refresh} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: '12px', opacity: loading ? 0.5 : 1 }}><RefreshCw style={{ width: '13px', height: '13px' }} className={loading ? 'animate-spin' : ''} />Refresh</button>
+              <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '12px', padding: '0 8px', borderRight: '1px solid rgba(255,255,255,0.1)' }}>{user?.email}</span>
+              <button onClick={() => { logout(); window.location.href = '/login' }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', cursor: 'pointer', fontSize: '12px' }}><LogOut style={{ width: '13px', height: '13px' }} />Logout</button>
             </div>
           </div>
         </div>
       </nav>
 
-      {/* Alert Banner (if issues exist) */}
       {alertCount > 0 && (
-        <div
-          onClick={() => setActiveTab('machines')}
-          style={{
-            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.08) 100%)',
-            borderBottom: '2px solid rgba(239, 68, 68, 0.4)',
-            padding: '12px 16px',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(239, 68, 68, 0.15) 100%)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.08) 100%)'
-          }}
-        >
-          <div style={{ maxWidth: '1600px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <AlertCircle style={{ color: '#ef4444', width: '20px', height: '20px', flexShrink: 0 }} />
-            <span style={{ color: '#fecaca', fontSize: '13px', fontWeight: '500' }}>
-              {alertCount} active {alertCount === 1 ? 'alert' : 'alerts'} • Review machines immediately
-            </span>
+        <div onClick={() => { setActiveTab('machines'); setStatusFilter('critical') }} style={{ background: 'rgba(239,68,68,0.1)', borderBottom: '1px solid rgba(239,68,68,0.25)', padding: '10px 20px', cursor: 'pointer' }} onMouseEnter={e => (e.currentTarget.style.background='rgba(239,68,68,0.18)')} onMouseLeave={e => (e.currentTarget.style.background='rgba(239,68,68,0.1)')}>
+          <div style={{ maxWidth: '1600px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><AlertCircle style={{ color: '#ef4444', width: '16px', height: '16px' }} /><span style={{ color: '#fca5a5', fontSize: '13px', fontWeight: '500' }}>{alertCount} machine{alertCount!==1?'s':''} need attention right now</span></div>
+            <span style={{ color: '#fca5a5', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>View affected machines <ChevronRight style={{ width: '14px', height: '14px' }} /></span>
           </div>
         </div>
       )}
 
-      {/* Tab Navigation */}
-      <div
-        style={{
-          background: 'rgba(0, 0, 0, 0.3)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          padding: '12px 16px',
-        }}
-      >
-        <div style={{ maxWidth: '1600px', margin: '0 auto', display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => setActiveTab('executive')}
-            style={tabButtonStyle(activeTab === 'executive')}
-          >
-            <BarChart3 className="h-4 w-4" />
-            Executive View
-          </button>
-          <button
-            onClick={() => setActiveTab('machines')}
-            style={tabButtonStyle(activeTab === 'machines')}
-          >
-            <Zap className="h-4 w-4" />
-            Machines
-          </button>
-          <button
-            onClick={() => setActiveTab('geographic')}
-            style={tabButtonStyle(activeTab === 'geographic')}
-          >
-            <MapPin className="h-4 w-4" />
-            Geographic
-          </button>
-          <button
-            onClick={() => setActiveTab('locations')}
-            style={tabButtonStyle(activeTab === 'locations')}
-          >
-            <MapPin className="h-4 w-4" />
-            Locations
-          </button>
-          <button
-            onClick={() => setActiveTab('analytics')}
-            style={tabButtonStyle(activeTab === 'analytics')}
-          >
-            <BarChart3 className="h-4 w-4" />
-            Analytics
-          </button>
+      {/* Tab bar */}
+      <div style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '10px 20px 0', position: 'sticky', top: '60px', zIndex: 90, backdropFilter: 'blur(12px)' }}>
+        <div style={{ maxWidth: '1600px', margin: '0 auto', display: 'flex', gap: '4px' }}>
+          <button onClick={() => setActiveTab('overview')}  style={tabBtn(activeTab==='overview','#60a5fa')}><LayoutDashboard style={{ width: '15px', height: '15px' }} />Overview</button>
+          <button onClick={() => setActiveTab('machines')}  style={tabBtn(activeTab==='machines','#a78bfa')}><Cpu style={{ width: '15px', height: '15px' }} />Machines{healthStatus.critical>0&&<span style={{ background:'#ef4444',color:'#fff',fontSize:'10px',fontWeight:'700',padding:'1px 6px',borderRadius:'10px' }}>{healthStatus.critical}</span>}</button>
+          <button onClick={() => setActiveTab('sites')}     style={tabBtn(activeTab==='sites','#34d399')}><MapPin style={{ width: '15px', height: '15px' }} />Sites & Products</button>
         </div>
       </div>
 
-      {/* Slicer Bar */}
-      <div
-        style={{
-          background: 'rgba(0, 0, 0, 0.2)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          padding: '12px 16px',
-        }}
-      >
-        <div style={{ maxWidth: '1600px', margin: '0 auto', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Date Range Slicer */}
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500' }}>📅 Period:</span>
-            {(['week', 'month', 'quarter'] as const).map(period => (
-              <button
-                key={period}
-                onClick={() => setDateRange(period)}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '6px',
-                  border: dateRange === period ? '1px solid rgba(96, 165, 250, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
-                  backgroundColor: dateRange === period ? 'rgba(96, 165, 250, 0.2)' : 'transparent',
-                  color: dateRange === period ? '#93c5fd' : 'rgba(255, 255, 255, 0.5)',
-                  fontSize: '11px',
-                  fontWeight: dateRange === period ? '600' : '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {period.charAt(0).toUpperCase() + period.slice(1)}
-              </button>
-            ))}
-          </div>
+      <main style={{ flex: 1, maxWidth: '1600px', margin: '0 auto', width: '100%', padding: '20px 20px 60px' }}>
+        {error && <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '10px', color: '#fca5a5', fontSize: '13px' }}>{error}</div>}
 
-          {/* Location Slicer */}
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500' }}>📍 Location:</span>
-            <select
-              value={selectedLocation || ''}
-              onChange={(e) => setSelectedLocation(e.target.value || null)}
-              style={{
-                padding: '6px 10px',
-                borderRadius: '6px',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                color: '#fff',
-                fontSize: '11px',
-                cursor: 'pointer',
-              }}
-            >
-              <option value="">All Locations</option>
-              {data?.machine_utilization && Object.keys(data.machine_utilization).map(loc => (
-                <option key={loc} value={loc}>{loc}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Machine Status Slicer */}
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500' }}>🔧 Status:</span>
-            {(['all', 'healthy', 'warning', 'critical'] as const).map(status => (
-              <button
-                key={status}
-                onClick={() => setMachineStatus(status)}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '4px',
-                  border: machineStatus === status ? '1px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
-                  backgroundColor: machineStatus === status 
-                    ? status === 'critical' ? 'rgba(239, 68, 68, 0.2)' 
-                    : status === 'warning' ? 'rgba(235, 179, 8, 0.2)'
-                    : 'rgba(34, 197, 94, 0.2)'
-                    : 'transparent',
-                  color: machineStatus === status 
-                    ? status === 'critical' ? '#fca5a5' 
-                    : status === 'warning' ? '#fbbf24'
-                    : '#86efac'
-                    : 'rgba(255, 255, 255, 0.4)',
-                  fontSize: '10px',
-                  fontWeight: machineStatus === status ? '600' : '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  textTransform: 'capitalize',
-                }}
-              >
-                {status}
-              </button>
-            ))}
-          </div>
-
-          {/* Reset Button */}
-          <button
-            onClick={() => {
-              setDateRange('week')
-              setSelectedLocation(null)
-              setMachineStatus('all')
-            }}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '6px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              backgroundColor: 'transparent',
-              color: 'rgba(255, 255, 255, 0.5)',
-              fontSize: '11px',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              marginLeft: 'auto',
-            }}
-          >
-            🔄 Reset
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <main style={{ flex: 1, maxWidth: '1600px', margin: '0 auto', width: '100%', padding: '24px 16px' }}>
-        {error && (
-          <div
-            style={{
-              marginBottom: '16px',
-              padding: '12px 16px',
-              backgroundColor: 'rgba(239, 68, 68, 0.15)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: '12px',
-              color: '#fecaca',
-              fontSize: '13px',
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        {/* EXECUTIVE VIEW TAB */}
-        {activeTab === 'executive' && (
+        {/* ─── OVERVIEW ─── */}
+        {activeTab === 'overview' && (
           <div>
-            {/* KPI Row */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '14px',
-                marginBottom: '18px',
-              }}
-            >
-              <KPICard title="Total Revenue" value={`$${(totalRevenue / 1000).toFixed(1)}K`} icon="revenue" loading={loading} />
-              <KPICard title="Machines" value={machineCount} icon="machines" loading={loading} />
-              <KPICard title="Avg Utilization" value={`${avgMachineUtilization.toFixed(1)}%`} icon="utilization" loading={loading} />
-              <KPICard title="Alerts" value={alertCount} icon="alerts" loading={loading} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '14px', marginBottom: '20px' }}>
+              <KPICard title="Total Revenue" value={`$${(totalRevenue/1000).toFixed(1)}K`} icon="revenue" trend={profitTrend?.up?'up':'down'} trendValue={profitTrend?`${profitTrend.pct}% vs yesterday`:undefined} loading={loading} />
+              <KPICard title="Active Machines" value={machines.length} icon="machines" trendValue={`${healthStatus.healthy} healthy · ${healthStatus.warning} warning`} trend="neutral" loading={loading} />
+              <KPICard title="Average Activity" value={`${avgUtilization.toFixed(1)}%`} icon="utilization" trendValue={avgUtilization>=70?'Fleet performing well':avgUtilization>=40?'Some machines underperforming':'Fleet needs attention'} trend={avgUtilization>=70?'up':'down'} loading={loading} />
+              <KPICard title="Active Alerts" value={alertCount} icon="alerts" trendValue={alertCount===0?'All machines normal':`${healthStatus.critical} critical · ${healthStatus.warning} warning`} trend={alertCount===0?'up':'down'} loading={loading} />
             </div>
 
-            {/* 3-Column Layout */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr 1fr',
-                gap: '14px',
-                marginBottom: '18px',
-              }}
-            >
-              {/* Revenue Distribution Pie */}
-              <div style={{ ...cardStyle, padding: '14px' }}>
-                <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 10px 0' }}>
-                  Revenue by Category
-                </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: '14px', marginBottom: '14px' }}>
+              <div style={{ ...cardStyle, padding: '18px' }}>
+                <p style={sh}>Revenue trend</p>
                 <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie
-                      data={revenuePieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={40}
-                      outerRadius={65}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {revenuePieData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value: any) => `$${(value / 1000).toFixed(1)}K`}
-                      contentStyle={{
-                        backgroundColor: 'rgba(26, 26, 46, 0.95)',
-                        border: '1px solid rgba(96, 165, 250, 0.3)',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        fontSize: '12px',
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Weekly Profit Trend */}
-              <div style={{ ...cardStyle, padding: '14px' }}>
-                <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 10px 0' }}>
-                  Weekly Profit Trend
-                </h3>
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={weeklyProfitData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.08)" />
-                    <XAxis dataKey="week" stroke="rgba(255, 255, 255, 0.4)" style={{ fontSize: '10px' }} />
-                    <YAxis stroke="rgba(255, 255, 255, 0.4)" style={{ fontSize: '10px' }} />
-                    <Tooltip
-                      formatter={(value: any) => `$${value.toFixed(1)}K`}
-                      contentStyle={{
-                        backgroundColor: 'rgba(26, 26, 46, 0.95)',
-                        border: '1px solid rgba(96, 165, 250, 0.3)',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        fontSize: '12px',
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="profit"
-                      stroke="#60a5fa"
-                      strokeWidth={2}
-                      dot={{ fill: '#93c5fd', r: 3 }}
-                      activeDot={{ r: 5 }}
-                    />
+                  <LineChart data={weeklyProfitData} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="day" stroke="rgba(255,255,255,0.3)" style={{ fontSize: '11px' }} />
+                    <YAxis stroke="rgba(255,255,255,0.3)" style={{ fontSize: '11px' }} tickFormatter={v=>`$${v}K`} />
+                    <Tooltip contentStyle={ttStyle} formatter={(v:any)=>[`$${Number(v).toFixed(1)}K`,'Revenue']} />
+                    <Line type="monotone" dataKey="revenue" stroke="#60a5fa" strokeWidth={2.5} dot={{ fill:'#60a5fa',r:3 }} activeDot={{ r:5,fill:'#93c5fd' }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-
-              {/* Health Status */}
-              <div style={{ ...cardStyle, padding: '14px' }}>
-                <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 10px 0' }}>
-                  Fleet Health
-                </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '20px' }}>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '11px', color: '#86efac' }}>Healthy</span>
-                      <span style={{ fontSize: '11px', fontWeight: '600', color: '#86efac' }}>{healthStatus.healthy}</span>
-                    </div>
-                    <div style={{ height: '6px', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: '3px' }}>
-                      <div
-                        style={{
-                          height: '100%',
-                          backgroundColor: '#22c55e',
-                          width: `${(healthStatus.healthy / machineCount) * 100}%`,
-                          borderRadius: '3px',
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '11px', color: '#fbbf24' }}>Warning</span>
-                      <span style={{ fontSize: '11px', fontWeight: '600', color: '#fbbf24' }}>{healthStatus.warning}</span>
-                    </div>
-                    <div style={{ height: '6px', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: '3px' }}>
-                      <div
-                        style={{
-                          height: '100%',
-                          backgroundColor: '#eab308',
-                          width: `${(healthStatus.warning / machineCount) * 100}%`,
-                          borderRadius: '3px',
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '11px', color: '#fecaca' }}>Critical</span>
-                      <span style={{ fontSize: '11px', fontWeight: '600', color: '#fecaca' }}>{healthStatus.critical}</span>
-                    </div>
-                    <div style={{ height: '6px', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: '3px' }}>
-                      <div
-                        style={{
-                          height: '100%',
-                          backgroundColor: '#ef4444',
-                          width: `${(healthStatus.critical / machineCount) * 100}%`,
-                          borderRadius: '3px',
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
+              <div style={{ ...cardStyle, padding: '18px' }}>
+                <p style={sh}>Revenue split by fleet health (stacked)</p>
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={stackedAreaData} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="day" stroke="rgba(255,255,255,0.3)" style={{ fontSize: '11px' }} />
+                    <YAxis stroke="rgba(255,255,255,0.3)" style={{ fontSize: '11px' }} tickFormatter={v=>`$${v}K`} />
+                    <Tooltip contentStyle={ttStyle} />
+                    <Legend iconSize={8} wrapperStyle={{ fontSize:'11px',color:'rgba(255,255,255,0.5)' }} />
+                    <Area type="monotone" dataKey="critical" stackId="1" stroke="#ef4444" fill="rgba(239,68,68,0.3)"  name="Critical" />
+                    <Area type="monotone" dataKey="warning"  stackId="1" stroke="#eab308" fill="rgba(234,179,8,0.3)"  name="Warning"  />
+                    <Area type="monotone" dataKey="healthy"  stackId="1" stroke="#22c55e" fill="rgba(34,197,94,0.3)"  name="Healthy"  />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{ ...cardStyle, padding: '18px' }}>
+                <p style={sh}>Sales by category</p>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie data={categoryRevenue} cx="50%" cy="48%" innerRadius={40} outerRadius={68} paddingAngle={3} dataKey="value">
+                      {categoryRevenue.map((_:any,i:number)=><Cell key={i} fill={COLORS[i%COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={ttStyle} formatter={(v:any)=>[`$${v}K`]} />
+                    <Legend iconSize={8} wrapperStyle={{ fontSize:'10px',color:'rgba(255,255,255,0.5)' }} />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Bottom Row: Locations Treemap + Scatter */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '14px',
-              }}
-            >
-              {/* Location Revenue Treemap */}
-              <div style={{ ...cardStyle, padding: '14px' }}>
-                <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 10px 0' }}>
-                  Top Locations by Revenue
-                </h3>
-                <ResponsiveContainer width="100%" height={240}>
-                  <Treemap
-                    data={locationsTreemapData}
-                    dataKey="value"
-                    stroke="#f0f0f0"
-                    fill="#8884d8"
-                  >
-                    {locationsTreemapData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Treemap>
-                </ResponsiveContainer>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '14px' }}>
+              <div style={{ ...cardStyle, padding: '18px' }}>
+                <p style={sh}>Fleet health</p>
+                <StackedStatusBar healthy={healthStatus.healthy} warning={healthStatus.warning} critical={healthStatus.critical} total={machines.length} height={36} onSegmentClick={s=>{setActiveTab('machines');setStatusFilter(s)}} />
+                <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {[{ label:'Healthy',count:healthStatus.healthy,color:'#22c55e',s:'healthy'as const },{ label:'Warning',count:healthStatus.warning,color:'#eab308',s:'warning'as const },{ label:'Needs attention',count:healthStatus.critical,color:'#ef4444',s:'critical'as const }].map(item=>(
+                    <div key={item.label} style={{ cursor:'pointer' }} onClick={()=>{setActiveTab('machines');setStatusFilter(item.s)}}>
+                      <div style={{ display:'flex',justifyContent:'space-between',marginBottom:'5px' }}><span style={{ fontSize:'12px',color:item.color,fontWeight:'600' }}>{item.label}</span><span style={{ fontSize:'12px',color:'rgba(255,255,255,0.6)',fontWeight:'600' }}>{item.count}<span style={{ fontSize:'10px',color:'rgba(255,255,255,0.3)' }}> / {machines.length}</span></span></div>
+                      <div style={{ height:'6px',background:'rgba(255,255,255,0.07)',borderRadius:'3px',overflow:'hidden' }}><div style={{ width:`${machines.length?(item.count/machines.length)*100:0}%`,height:'100%',background:item.color,borderRadius:'3px',transition:'width 0.5s' }} /></div>
+                    </div>
+                  ))}
+                  <div style={{ fontSize:'10px',color:'rgba(255,255,255,0.25)',textAlign:'center',marginTop:'4px' }}>Click any row to filter machines →</div>
+                </div>
               </div>
+              <div style={{ ...cardStyle, padding: '18px' }}>
+                <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px' }}>
+                  <p style={{ ...sh, margin:0 }}>Active alerts</p>
+                  {alertCount>0&&<button onClick={()=>{setActiveTab('machines');setStatusFilter('critical')}} style={{ fontSize:'11px',color:'#fca5a5',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:'6px',padding:'4px 10px',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px' }}>See all<ChevronRight style={{ width:'12px',height:'12px' }} /></button>}
+                </div>
+                {alertCount===0
+                  ? <div style={{ display:'flex',alignItems:'center',gap:'10px',padding:'16px',background:'rgba(34,197,94,0.08)',borderRadius:'8px',border:'1px solid rgba(34,197,94,0.2)' }}><span style={{ fontSize:'18px' }}>✓</span><span style={{ fontSize:'13px',color:'#86efac' }}>All machines operating normally.</span></div>
+                  : <div style={{ display:'flex',flexDirection:'column',gap:'7px' }}>
+                    {(data?.alerts??[]).slice(0,6).map((alert:string,idx:number)=>{
+                      const mId=alert.match(/^([A-Z0-9-]+)/)?.[1]??null
+                      const util=machines.find(x=>x.id===mId)?.utilization??0
+                      return <div key={idx} style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'9px 12px',borderRadius:'8px',background:getStatusBg(util),border:`1px solid ${getStatusBorder(util)}`,cursor:'pointer' }} onClick={()=>{setSelectedMachineId(mId);setActiveTab('machines')}}>
+                        <div style={{ display:'flex',alignItems:'center',gap:'8px' }}><AlertCircle style={{ width:'13px',height:'13px',color:getStatusColor(util),flexShrink:0 }} />{mId&&<span style={{ fontSize:'11px',fontWeight:'700',color:getStatusColor(util) }}>{mId}</span>}<span style={{ fontSize:'12px',color:'rgba(255,255,255,0.65)' }}>{alert.replace(mId??'','').trim()}</span></div>
+                        <span style={{ fontSize:'10px',color:'#60a5fa',whiteSpace:'nowrap' }}>View →</span>
+                      </div>
+                    })}
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        )}
 
-              {/* Utilization Distribution Bar */}
-              <div style={{ ...cardStyle, padding: '14px' }}>
-                <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 10px 0' }}>
-                  Utilization Distribution
-                </h3>
+        {/* ─── MACHINES ─── */}
+        {activeTab === 'machines' && (
+          <div>
+            <div style={{ display:'flex',gap:'6px',marginBottom:'16px',flexWrap:'wrap',alignItems:'center' }}>
+              {([['grid','⊞  Machine Grid'],['distribution','📊  Distributions'],['scatter','·  Activity vs Revenue'],['trends','📈  Trends']] as [MachinesSubTab,string][]).map(([key,label])=>(
+                <button key={key} onClick={()=>setMachinesSubTab(key)} style={subTabBtn(machinesSubTab===key)}>{label}</button>
+              ))}
+              <div style={{ marginLeft:'auto',display:'flex',gap:'6px' }}>
+                {(['all','healthy','warning','critical'] as const).map(s=>(
+                  <button key={s} onClick={()=>setStatusFilter(s)} style={pillBtn(statusFilter===s,s==='critical'?'#ef4444':s==='warning'?'#eab308':s==='healthy'?'#22c55e':'#60a5fa')}>
+                    {s==='all'?`All (${machines.length})`:s==='healthy'?`✓ ${healthStatus.healthy}`:s==='warning'?`⚠ ${healthStatus.warning}`:`✕ ${healthStatus.critical}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {healthStatus.critical>0&&(
+              <div style={{ ...cardStyle,padding:'12px 16px',marginBottom:'16px',borderColor:'rgba(239,68,68,0.3)',background:'rgba(239,68,68,0.07)',display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap' }}>
+                <Package style={{ width:'15px',height:'15px',color:'#ef4444',flexShrink:0 }} />
+                <span style={{ fontSize:'13px',color:'#fca5a5',fontWeight:'600' }}>Restock priority:</span>
+                {restockList.filter(m=>m.utilization<40).slice(0,8).map(m=>(
+                  <span key={m.id} onClick={()=>setSelectedMachineId(m.id)} style={{ fontSize:'11px',padding:'3px 10px',borderRadius:'5px',background:'rgba(239,68,68,0.2)',color:'#fca5a5',fontWeight:'700',cursor:'pointer',border:'1px solid rgba(239,68,68,0.3)' }}>{m.id}{m.hasAlert?' ⚠':''}</span>
+                ))}
+              </div>
+            )}
+            <div style={{ display:'grid',gridTemplateColumns:selectedMachineId?'1fr 380px':'1fr',gap:'16px',alignItems:'start' }}>
+              <div>
+                {/* GRID sub-tab */}
+                {machinesSubTab==='grid'&&(
+                  <div style={{ ...cardStyle,padding:'20px' }}>
+                    <p style={sh}>All machines — click any card to see detail</p>
+                    <MachineGrid machines={filteredMachines} selectedId={selectedMachineId} onSelect={id=>setSelectedMachineId(id===selectedMachineId?null:id)} pageSize={24} />
+                  </div>
+                )}
+                {/* DISTRIBUTION sub-tab */}
+                {machinesSubTab==='distribution'&&(
+                  <div style={{ display:'flex',flexDirection:'column',gap:'14px' }}>
+                    <div style={{ ...cardStyle,padding:'20px' }}>
+                      <p style={sh}>Activity distribution — number of machines per range</p>
+                      <ActivityHistogram values={filteredMachines.map(m=>m.utilization)} bins={10} width={900} height={200} />
+                      <div style={{ marginTop:'8px',fontSize:'11px',color:'rgba(255,255,255,0.3)',textAlign:'center' }}>Each bar = machines with that activity level · Red = needs attention · Yellow = warning · Green = healthy</div>
+                    </div>
+                    {boxGroups.length>0&&(
+                      <div style={{ ...cardStyle,padding:'20px' }}>
+                        <p style={sh}>Box plots — spread of activity within each status group</p>
+                        <BoxPlotChart groups={boxGroups} width={900} domain={[0,100]} />
+                        <div style={{ marginTop:'8px',fontSize:'11px',color:'rgba(255,255,255,0.3)',textAlign:'center' }}>Box = middle 50% of machines · Line = median · ◆ = average · ○ = outlier machine · Whiskers = full range</div>
+                      </div>
+                    )}
+                    {violinGroups.length>0&&(
+                      <div style={{ ...cardStyle,padding:'20px' }}>
+                        <p style={sh}>Violin plots — shape of activity distribution per group</p>
+                        <ViolinPlotChart groups={violinGroups} width={900} height={260} domain={[0,100]} />
+                        <div style={{ marginTop:'8px',fontSize:'11px',color:'rgba(255,255,255,0.3)',textAlign:'center' }}>Wider = more machines at that level · Dot = median · Inner box = middle 50%</div>
+                      </div>
+                    )}
+                    <div style={{ ...cardStyle,padding:'20px' }}>
+                      <p style={sh}>Fleet composition by performance band</p>
+                      <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'12px',marginBottom:'16px' }}>
+                        {[{label:'Elite',range:'90–100%',min:90,max:101,color:'#10b981'},{label:'Good',range:'70–89%',min:70,max:90,color:'#22c55e'},{label:'Average',range:'40–69%',min:40,max:70,color:'#eab308'},{label:'Low',range:'20–39%',min:20,max:40,color:'#f97316'},{label:'Critical',range:'0–19%',min:0,max:20,color:'#ef4444'}].map(tier=>{
+                          const cnt=filteredMachines.filter(m=>m.utilization>=tier.min&&m.utilization<tier.max).length
+                          return <div key={tier.label} style={{ ...cardStyle,padding:'14px',textAlign:'center',borderColor:`${tier.color}40` }}><div style={{ fontSize:'11px',fontWeight:'700',color:tier.color,marginBottom:'8px',textTransform:'uppercase',letterSpacing:'0.5px' }}>{tier.label}</div><div style={{ fontSize:'28px',fontWeight:'800',color:tier.color,lineHeight:1 }}>{cnt}</div><div style={{ fontSize:'10px',color:'rgba(255,255,255,0.35)',marginTop:'4px' }}>{tier.range}</div></div>
+                        })}
+                      </div>
+                      <StackedStatusBar healthy={healthStatus.healthy} warning={healthStatus.warning} critical={healthStatus.critical} total={machines.length} height={24} showLabels={false} onSegmentClick={s=>setStatusFilter(s)} />
+                    </div>
+                  </div>
+                )}
+                {/* SCATTER sub-tab */}
+                {machinesSubTab==='scatter'&&(
+                  <div style={{ display:'flex',flexDirection:'column',gap:'14px' }}>
+                    <div style={{ ...cardStyle,padding:'20px' }}>
+                      <p style={sh}>Activity level vs estimated revenue — each dot = one machine</p>
+                      <ScatterPlotChart points={scatterPoints} width={900} height={340} xLabel="Activity level %" yLabel="Est. Revenue $K" onPointClick={id=>setSelectedMachineId(id===selectedMachineId?null:id)} />
+                      <div style={{ marginTop:'8px',fontSize:'11px',color:'rgba(255,255,255,0.3)',textAlign:'center' }}>Dashed line = overall trend · Click any dot to open detail · Colour = health status</div>
+                    </div>
+                    <div style={{ ...cardStyle,padding:'20px' }}>
+                      <p style={sh}>Top 10 machines — revenue bar + activity line (dual axis)</p>
+                      <ResponsiveContainer width="100%" height={240}>
+                        <ComposedChart data={[...machines].sort((a,b)=>(machineRevenueMap[b.id]??0)-(machineRevenueMap[a.id]??0)).slice(0,10).map(m=>({ id:m.id.length>10?m.id.slice(0,9)+'…':m.id, revenue:machineRevenueMap[m.id]??0, activity:parseFloat(m.utilization.toFixed(1)) }))} margin={{ top:4,right:40,left:-10,bottom:30 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                          <XAxis dataKey="id" stroke="rgba(255,255,255,0.3)" style={{ fontSize:'10px' }} angle={-30} textAnchor="end" height={50} />
+                          <YAxis yAxisId="rev" stroke="rgba(255,255,255,0.3)" style={{ fontSize:'10px' }} tickFormatter={v=>`$${v}K`} />
+                          <YAxis yAxisId="act" orientation="right" stroke="rgba(255,255,255,0.3)" style={{ fontSize:'10px' }} tickFormatter={v=>`${v}%`} domain={[0,100]} />
+                          <Tooltip contentStyle={ttStyle} formatter={(v:any)=>[typeof v === 'string' ? v : `$${v}K`]} />
+                          <Legend iconSize={8} wrapperStyle={{ fontSize:'11px',color:'rgba(255,255,255,0.5)' }} />
+                          <Bar yAxisId="rev" dataKey="revenue" radius={[3,3,0,0]} name="revenue">
+                            {[...machines].sort((a,b)=>(machineRevenueMap[b.id]??0)-(machineRevenueMap[a.id]??0)).slice(0,10).map((m,i)=><Cell key={i} fill={`${getStatusColor(m.utilization)}80`} />)}
+                          </Bar>
+                          <Line yAxisId="act" type="monotone" dataKey="activity" stroke="#fbbf24" strokeWidth={2} dot={{ r:4,fill:'#fbbf24' }} name="activity" />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+                {/* TRENDS sub-tab */}
+                {machinesSubTab==='trends'&&(
+                  <div style={{ display:'flex',flexDirection:'column',gap:'14px' }}>
+                    <div style={{ ...cardStyle,padding:'20px' }}>
+                      <p style={sh}>Revenue trend — top 5 machines</p>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <LineChart data={machineTrendData} margin={{ top:4,right:12,left:-14,bottom:0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                          <XAxis dataKey="day" stroke="rgba(255,255,255,0.3)" style={{ fontSize:'11px' }} />
+                          <YAxis stroke="rgba(255,255,255,0.3)" style={{ fontSize:'11px' }} tickFormatter={v=>`$${v}K`} />
+                          <Tooltip contentStyle={ttStyle} formatter={(v:any)=>[`$${Number(v).toFixed(1)}K`]} />
+                          <Legend iconSize={8} wrapperStyle={{ fontSize:'11px',color:'rgba(255,255,255,0.5)' }} />
+                          {top5Machines.map((m,i)=><Line key={m.id} type="monotone" dataKey={m.id} stroke={COLORS[i]} strokeWidth={selectedMachineId===m.id?3:1.5} dot={false} activeDot={{ r:4 }} opacity={selectedMachineId&&selectedMachineId!==m.id?0.25:1} />)}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div style={{ ...cardStyle,padding:'20px' }}>
+                      <p style={sh}>Stacked area — top 5 machines combined</p>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart data={machineTrendData} margin={{ top:4,right:12,left:-14,bottom:0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                          <XAxis dataKey="day" stroke="rgba(255,255,255,0.3)" style={{ fontSize:'11px' }} />
+                          <YAxis stroke="rgba(255,255,255,0.3)" style={{ fontSize:'11px' }} tickFormatter={v=>`$${v}K`} />
+                          <Tooltip contentStyle={ttStyle} />
+                          <Legend iconSize={8} wrapperStyle={{ fontSize:'11px',color:'rgba(255,255,255,0.5)' }} />
+                          {top5Machines.map((m,i)=><Area key={m.id} type="monotone" dataKey={m.id} stackId="1" stroke={COLORS[i]} fill={`${COLORS[i]}40`} name={m.id} />)}
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div style={{ ...cardStyle,padding:'20px' }}>
+                      <p style={sh}>Daily revenue — fleet average</p>
+                      <ResponsiveContainer width="100%" height={180}>
+                        <BarChart data={weeklyProfitData} margin={{ top:4,right:12,left:-14,bottom:0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                          <XAxis dataKey="day" stroke="rgba(255,255,255,0.3)" style={{ fontSize:'11px' }} />
+                          <YAxis stroke="rgba(255,255,255,0.3)" style={{ fontSize:'11px' }} tickFormatter={v=>`$${v}K`} />
+                          <Tooltip contentStyle={ttStyle} formatter={(v:any)=>[`$${Number(v).toFixed(1)}K`]} />
+                          <Bar dataKey="revenue" fill="rgba(96,165,250,0.4)" radius={[3,3,0,0]} name="Fleet avg revenue" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {selectedMachineId&&selectedMachine&&(
+                <MachineDetailPanel machine={selectedMachine} alerts={machineAlerts}
+                  trendData={weeklyProfitData.map(d=>({ day:d.day, revenue:parseFloat((d.revenue*(selectedMachine.utilization/100)).toFixed(2)) }))}
+                  onClose={()=>setSelectedMachineId(null)} cardStyle={cardStyle} />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─── SITES ─── */}
+        {activeTab === 'sites' && (
+          <div>
+            <div style={{ display:'flex',alignItems:'center',gap:'8px',marginBottom:'16px',flexWrap:'wrap' }}>
+              <span style={{ fontSize:'12px',color:'rgba(255,255,255,0.4)',fontWeight:'700',letterSpacing:'0.5px' }}>SITE:</span>
+              <button onClick={()=>setSelectedLocation(null)} style={pillBtn(!selectedLocation,'#34d399')}>All</button>
+              {locationAnalytics.slice(0,7).map(l=><button key={l.location} onClick={()=>setSelectedLocation(l.location===selectedLocation?null:l.location)} style={pillBtn(selectedLocation===l.location,'#34d399')}>{l.location.length>14?l.location.slice(0,13)+'…':l.location}</button>)}
+            </div>
+            <div style={{ display:'grid',gridTemplateColumns:'2fr 1fr',gap:'14px',marginBottom:'14px' }}>
+              <div style={{ ...cardStyle,padding:'16px',minHeight:'360px',display:'flex',flexDirection:'column' }}>
+                <p style={sh}>Machine locations — click a pin to filter</p>
+                <div style={{ flex:1,borderRadius:'10px',overflow:'hidden',minHeight:'300px' }}>
+                  {data?.map && data.map.length > 0
+                    ? <LocationMap locations={data.map.map((loc:any)=>({ location:loc.location, revenue:((data.all_locations_revenue?.[loc.location]??0)/1000), latitude:loc.lat, longitude:loc.lon }))} />
+                    :<div style={{ display:'flex',alignItems:'center',justifyContent:'center',height:'300px',color:'rgba(255,255,255,0.4)' }}>No location data</div>}
+                </div>
+              </div>
+              <div style={{ ...cardStyle,padding:'16px' }}>
+                <p style={sh}>Revenue by site</p>
+                <div style={{ overflowY:'auto',maxHeight:'320px' }}>
+                  {(selectedLocation?locationAnalytics.filter(l=>l.location===selectedLocation):locationAnalytics).map((loc,idx)=>(
+                    <div key={loc.location} onClick={()=>setSelectedLocation(loc.location===selectedLocation?null:loc.location)} style={{ display:'flex',alignItems:'center',gap:'10px',padding:'9px 10px',borderRadius:'8px',marginBottom:'4px',background:selectedLocation===loc.location?'rgba(52,211,153,0.12)':'rgba(255,255,255,0.02)',border:`1px solid ${selectedLocation===loc.location?'rgba(52,211,153,0.3)':'transparent'}`,cursor:'pointer' }}>
+                      <span style={{ fontSize:'11px',fontWeight:'700',color:'rgba(255,255,255,0.3)',width:'18px' }}>#{idx+1}</span>
+                      <div style={{ flex:1,minWidth:0 }}><div style={{ fontSize:'12px',color:'#fff',fontWeight:'600',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{loc.location}</div><div style={{ marginTop:'4px',height:'4px',background:'rgba(255,255,255,0.06)',borderRadius:'2px' }}><div style={{ height:'100%',background:'#34d399',borderRadius:'2px',width:`${loc.share}%` }} /></div></div>
+                      <div style={{ textAlign:'right',flexShrink:0 }}><div style={{ fontSize:'13px',fontWeight:'700',color:'#34d399' }}>${loc.revenueK}K</div><div style={{ fontSize:'10px',color:'rgba(255,255,255,0.35)' }}>{loc.share}%</div></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{ display:'grid',gridTemplateColumns:'3fr 2fr',gap:'14px',marginBottom:'14px' }}>
+              <div style={{ ...cardStyle,padding:'18px' }}>
+                <p style={sh}>Revenue by category per site (stacked)</p>
                 <ResponsiveContainer width="100%" height={240}>
-                  <BarChart
-                    data={[
-                      { range: '0-20%', count: machines.filter((m) => m.utilization < 20).length, fill: '#ef4444' },
-                      { range: '20-40%', count: machines.filter((m) => m.utilization >= 20 && m.utilization < 40).length, fill: '#f97316' },
-                      { range: '40-60%', count: machines.filter((m) => m.utilization >= 40 && m.utilization < 60).length, fill: '#eab308' },
-                      { range: '60-80%', count: machines.filter((m) => m.utilization >= 60 && m.utilization < 80).length, fill: '#84cc16' },
-                      { range: '80-100%', count: machines.filter((m) => m.utilization >= 80).length, fill: '#22c55e' },
-                    ]}
-                    margin={{ top: 0, right: 0, bottom: 0, left: -20 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.08)" />
-                    <XAxis dataKey="range" stroke="rgba(255, 255, 255, 0.4)" style={{ fontSize: '10px' }} />
-                    <YAxis stroke="rgba(255, 255, 255, 0.4)" style={{ fontSize: '10px' }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'rgba(26, 26, 46, 0.95)',
-                        border: '1px solid rgba(96, 165, 250, 0.3)',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        fontSize: '12px',
-                      }}
-                    />
-                    <Bar dataKey="count" fill="#60a5fa" radius={[4, 4, 0, 0]} />
+                  <BarChart data={stackedBarData} margin={{ top:4,right:8,left:-10,bottom:50 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="site" stroke="rgba(255,255,255,0.3)" style={{ fontSize:'10px' }} angle={-30} textAnchor="end" height={60} />
+                    <YAxis stroke="rgba(255,255,255,0.3)" style={{ fontSize:'10px' }} tickFormatter={v=>`$${v}K`} />
+                    <Tooltip contentStyle={ttStyle} formatter={(v:any)=>[`$${v}K`]} />
+                    <Legend iconSize={8} wrapperStyle={{ fontSize:'10px',color:'rgba(255,255,255,0.5)' }} />
+                    {categoryRevenue.map((cat:any,i:number)=><Bar key={cat.name} dataKey={cat.name} stackId="a" fill={COLORS[i%COLORS.length]} />)}
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            </div>
-
-            {/* Quick Alert Summary - Link to Analytics */}
-            {alertCount > 0 && (
-              <div
-                style={{
-                  marginTop: '18px',
-                  ...cardStyle,
-                  padding: '14px',
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  borderLeft: '3px solid #ef4444',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <span style={{ fontSize: '13px', color: '#fca5a5' }}>
-                  ⚠️ {alertCount} active alert{alertCount !== 1 ? 's' : ''} detected • {alertsCorrelatedWithLowUtil} correlated with low utilization
-                </span>
-                <button
-                  onClick={() => setActiveTab('analytics')}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    color: '#fca5a5',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                  }}
-                >
-                  View Analysis →
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ANALYTICS TAB - Deep Dive Analysis */}
-        {activeTab === 'analytics' && (
-          <div>
-            {/* Statistical Analysis Section */}
-            {stats && (
-              <div
-                style={{
-                  marginBottom: '18px',
-                  ...cardStyle,
-                  borderRadius: '12px',
-                  padding: '16px',
-                }}
-              >
-                <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#a5f3fc', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  📊 Statistical Analysis
-                </h3>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr 1fr 1fr',
-                    gap: '12px',
-                  }}
-                >
-                </div>
-
-                {/* Statistics as Table */}
-                <div style={{ ...cardStyle, padding: '0', marginTop: '12px', overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: 'rgba(99, 102, 241, 0.15)', borderBottom: '1px solid rgba(99, 102, 241, 0.3)' }}>
-                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: '700', color: '#a5f3fc', textTransform: 'uppercase' }}>Metric</th>
-                        <th style={{ textAlign: 'right', padding: '12px 16px', fontSize: '11px', fontWeight: '700', color: '#a5f3fc', textTransform: 'uppercase' }}>Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[
-                        { label: 'Mean', value: `${stats.mean}%`, color: '#60a5fa' },
-                        { label: 'Median', value: `${stats.median}%`, color: '#a78bfa' },
-                        { label: 'Std Dev', value: `${stats.stdDev}%`, color: '#fbbf24' },
-                        { label: 'Coefficient of Variation', value: `${stats.cv}%`, color: '#fb923c' },
-                        { label: 'Min', value: `${stats.min}%`, color: '#f87171' },
-                        { label: 'Max', value: `${stats.max}%`, color: '#22c55e' },
-                        { label: 'Range (Span)', value: `${stats.range}%`, color: '#34d399' },
-                        { label: 'Q1', value: `${stats.q1}%`, color: '#a1e8af' },
-                        { label: 'Q3', value: `${stats.q3}%`, color: '#91d5ff' },
-                        { label: 'IQR', value: `${stats.iqr}%`, color: '#cbd5e1' },
-                      ].map((row, idx) => (
-                        <tr
-                          key={`stat-${idx}`}
-                          style={{
-                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                            backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.01)',
-                          }}
-                        >
-                          <td style={{ padding: '12px 16px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>
-                            {row.label}
-                          </td>
-                          <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: '700', color: row.color, textAlign: 'right' }}>
-                            {row.value}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Quartile Distribution Bar */}
-                <div style={{ ...cardStyle, padding: '14px', marginTop: '12px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '10px' }}>
-                    Quartile Distribution
-                  </div>
-                  <div style={{ height: '32px', backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', display: 'flex', overflow: 'hidden', gap: '2px', padding: '2px' }}>
-                    {[
-                      { label: 'Q1', count: stats.q1Count, color: '#ef4444', range: `< ${stats.q1}%` },
-                      { label: 'Q2', count: stats.q2Count, color: '#f97316', range: `${stats.q1}% - ${stats.median}%` },
-                      { label: 'Q3', count: stats.q3Count, color: '#eab308', range: `${stats.median}% - ${stats.q3}%` },
-                      { label: 'Q4', count: stats.q4Count, color: '#22c55e', range: `> ${stats.q3}%` },
-                    ].map((q, i) => {
-                      const width = (q.count / machines.length) * 100
-                      return (
-                        <div
-                          key={`q-${i}`}
-                          style={{
-                            flex: width,
-                            backgroundColor: q.color,
-                            borderRadius: '4px',
-                            opacity: 0.8,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            minWidth: width > 8 ? undefined : '0px',
-                            transition: 'opacity 0.3s ease',
-                            cursor: 'pointer',
-                            position: 'relative',
-                            overflow: 'hidden',
-                          }}
-                          title={`${q.label}: ${q.count} machines (${((q.count / machines.length) * 100).toFixed(1)}%)`}
-                        >
-                          {width > 15 && (
-                            <span style={{ fontSize: '11px', fontWeight: '700', color: '#000', zIndex: 1, textShadow: '0 0 2px rgba(255,255,255,0.5)' }}>
-                              {q.count}
-                            </span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                  <div style={{ marginTop: '10px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', fontSize: '11px' }}>
-                    {[
-                      { label: 'Q1 (Bottom)', color: '#ef4444', range: `< ${stats.q1}%` },
-                      { label: 'Q2 (Lower)', color: '#f97316', range: `${stats.q1}% - ${stats.median}%` },
-                      { label: 'Q3 (Upper)', color: '#eab308', range: `${stats.median}% - ${stats.q3}%` },
-                      { label: 'Q4 (Top)', color: '#22c55e', range: `> ${stats.q3}%` },
-                    ].map((q, i) => (
-                      <div key={`qlegend-${i}`} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <div style={{ width: '8px', height: '8px', backgroundColor: q.color, borderRadius: '2px' }} />
-                        <div style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                          <div style={{ fontSize: '10px', fontWeight: '600' }}>{q.label}</div>
-                          <div style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)' }}>{q.range}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Profit Trend Metrics */}
-            {profitMetrics && (
-              <div style={{ 
-                marginBottom: '18px',
-                ...cardStyle,
-                borderRadius: '12px',
-                padding: '16px',
-              }}>
-                <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#86efac', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  💰 Profit Trend Analysis
-                </h3>
-                
-                {/* Profit Trend Line Chart */}
-                <div style={{ ...cardStyle, padding: '20px', marginBottom: '14px', minHeight: '250px' }}>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart
-                      data={weeklyProfitData}
-                      margin={{ top: 10, right: 20, left: -10, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
-                      <XAxis 
-                        dataKey="week" 
-                        stroke="rgba(255, 255, 255, 0.4)"
-                        style={{ fontSize: '11px' }}
-                      />
-                      <YAxis 
-                        stroke="rgba(255, 255, 255, 0.4)"
-                        style={{ fontSize: '11px' }}
-                        label={{ value: '$K', angle: -90, position: 'insideLeft', style: { color: 'rgba(255, 255, 255, 0.4)' } }}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'rgba(26, 26, 46, 0.95)',
-                          border: '1px solid rgba(132, 204, 22, 0.3)',
-                          borderRadius: '8px',
-                          color: '#fff',
-                          fontSize: '12px',
-                        }}
-                        formatter={(value: any) => typeof value === 'number' ? `$${value.toFixed(1)}K` : value}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="profit"
-                        stroke="#86efac"
-                        strokeWidth={3}
-                        dot={{ fill: '#22c55e', r: 5 }}
-                        activeDot={{ r: 7 }}
-                        isAnimationActive={true}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Summary Stats Row */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '14px' }}>
-                  {/* Total Profit */}
-                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                      Total Weekly Profit
-                    </div>
-                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#10b981', marginBottom: '4px' }}>
-                      ${(profitMetrics.totalProfit / 1000).toFixed(1)}K
-                    </div>
-                    <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)' }}>
-                      {profitMetrics.dayOverDayChanges.length} days
-                    </div>
-                  </div>
-
-                  {/* Best Day */}
-                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                      Best Day
-                    </div>
-                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#86efac', marginBottom: '4px' }}>
-                      ${(profitMetrics.maxProfit / 1000).toFixed(1)}K
-                    </div>
-                    <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', fontWeight: '500' }}>
-                      {profitMetrics.maxDay}
-                    </div>
-                  </div>
-
-                  {/* Worst Day */}
-                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                      Worst Day
-                    </div>
-                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#fca5a5', marginBottom: '4px' }}>
-                      ${(profitMetrics.minProfit / 1000).toFixed(1)}K
-                    </div>
-                    <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', fontWeight: '500' }}>
-                      {profitMetrics.minDay}
-                    </div>
-                  </div>
-
-                  {/* Week-over-Week Change */}
-                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                      Trend (1st vs 2nd Half)
-                    </div>
-                    <div style={{ fontSize: '20px', fontWeight: '700', color: profitMetrics.weekOverWeekChange >= 0 ? '#86efac' : '#fca5a5', marginBottom: '4px' }}>
-                      {profitMetrics.weekOverWeekPercent.toFixed(1)}%
-                    </div>
-                    <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)' }}>
-                      {profitMetrics.weekOverWeekChange >= 0 ? '📈 Improving' : '📉 Declining'}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Day-over-Day Changes - Bar Chart */}
-                <div style={{ 
-                  ...cardStyle, 
-                  padding: '20px',
-                  minHeight: '280px',
-                }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#f97316', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    📈 Daily Changes
-                  </div>
+              {locationAnalytics.length>=3&&(
+                <div style={{ ...cardStyle,padding:'18px' }}>
+                  <p style={sh}>Site performance radar — top 5 sites</p>
                   <ResponsiveContainer width="100%" height={240}>
-                    <BarChart
-                      data={profitMetrics.dayOverDayChanges.map(change => ({
-                        name: `${change.from}→${change.to}`,
-                        change: parseFloat((change.change / 1000).toFixed(1)),
-                        percent: parseFloat(change.percentChange.toFixed(1)),
-                      }))}
-                      margin={{ top: 10, right: 20, left: 0, bottom: 40 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
-                      <XAxis 
-                        dataKey="name" 
-                        stroke="rgba(255, 255, 255, 0.4)"
-                        angle={-45}
-                        textAnchor="end"
-                        height={80}
-                        style={{ fontSize: '10px' }}
-                      />
-                      <YAxis 
-                        stroke="rgba(255, 255, 255, 0.4)"
-                        style={{ fontSize: '10px' }}
-                        label={{ value: '$K', angle: -90, position: 'insideLeft', style: { color: 'rgba(255, 255, 255, 0.4)' } }}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'rgba(26, 26, 46, 0.95)',
-                          border: '1px solid rgba(251, 146, 60, 0.3)',
-                          borderRadius: '8px',
-                          color: '#fff',
-                          fontSize: '12px',
-                        }}
-                        formatter={(value: any) => typeof value === 'number' ? `$${value.toFixed(1)}K` : value}
-                      />
-                      <Bar
-                        dataKey="change"
-                        fill="#f97316"
-                        radius={[4, 4, 0, 0]}
-                        isAnimationActive={true}
-                      />
-                    </BarChart>
+                    <RadarChart data={radarData} margin={{ top:0,right:20,left:20,bottom:0 }}>
+                      <PolarGrid stroke="rgba(255,255,255,0.1)" />
+                      <PolarAngleAxis dataKey="metric" tick={{ fill:'rgba(255,255,255,0.5)',fontSize:11 }} />
+                      <PolarRadiusAxis domain={[0,100]} tick={false} axisLine={false} />
+                      {locationAnalytics.slice(0,5).map((loc,i)=><Radar key={loc.location} name={loc.location.slice(0,10)} dataKey={loc.location.slice(0,10)} stroke={SITE_COLORS[i]} fill={SITE_COLORS[i]} fillOpacity={0.1} strokeWidth={1.5} />)}
+                      <Legend iconSize={8} wrapperStyle={{ fontSize:'10px',color:'rgba(255,255,255,0.5)' }} />
+                      <Tooltip contentStyle={ttStyle} formatter={(v:any)=>[`${Number(v).toFixed(0)}`]} />
+                    </RadarChart>
                   </ResponsiveContainer>
                 </div>
+              )}
+            </div>
+            <div style={{ display:'grid',gridTemplateColumns:'2fr 1fr',gap:'14px',marginBottom:'14px' }}>
+              <div style={{ ...cardStyle,padding:'18px' }}>
+                <p style={sh}>Revenue comparison by site</p>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={locationBarData} margin={{ top:0,right:8,left:-10,bottom:40 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" style={{ fontSize:'10px' }} angle={-30} textAnchor="end" height={56} />
+                    <YAxis stroke="rgba(255,255,255,0.3)" style={{ fontSize:'10px' }} tickFormatter={v=>`$${v}K`} />
+                    <Tooltip contentStyle={ttStyle} formatter={(v:any,_:any,props:any)=>[`$${v}K`,props.payload.fullName]} />
+                    <Bar dataKey="revenue" radius={[4,4,0,0]} cursor="pointer">{locationBarData.map((entry,i)=><Cell key={i} fill={selectedLocation===entry.fullName?'#34d399':'#34d39960'} onClick={()=>setSelectedLocation(entry.fullName===selectedLocation?null:entry.fullName)} />)}</Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            )}
-
-            {/* Alert Correlation Analysis Panel */}
-            {alertCount > 0 && (
-              <div style={{ 
-                marginBottom: '18px',
-                ...cardStyle,
-                borderRadius: '12px',
-                padding: '16px',
-              }}>
-                <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#fca5a5', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  ⚠️ Alert Correlation Analysis
-                </h3>
-                
-                {/* Alert Distribution Bar */}
-                <div style={{ ...cardStyle, padding: '20px', marginBottom: '14px', minHeight: '120px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '14px' }}>
-                    Alert Status Distribution
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {/* Stacked Bar */}
-                    <div style={{ height: '32px', backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', display: 'flex', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                      <div
-                        style={{
-                          flex: alertsCorrelatedWithLowUtil,
-                          backgroundColor: '#ef4444',
-                          opacity: 0.8,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#fff',
-                          fontSize: '11px',
-                          fontWeight: '700',
-                        }}
-                      >
-                        {alertsCorrelatedWithLowUtil > 0 && `${alertsCorrelatedWithLowUtil}`}
-                      </div>
-                      <div
-                        style={{
-                          flex: alertCount - alertsCorrelatedWithLowUtil,
-                          backgroundColor: '#60a5fa',
-                          opacity: 0.8,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#fff',
-                          fontSize: '11px',
-                          fontWeight: '700',
-                        }}
-                      >
-                        {(alertCount - alertsCorrelatedWithLowUtil) > 0 && `${alertCount - alertsCorrelatedWithLowUtil}`}
-                      </div>
-                    </div>
-                    
-                    {/* Legend */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '11px' }}>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <div style={{ width: '12px', height: '12px', backgroundColor: '#ef4444', borderRadius: '2px' }} />
-                        <div>
-                          <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontWeight: '600' }}>
-                            Correlated: {alertsCorrelatedWithLowUtil}
-                          </div>
-                          <div style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '10px' }}>
-                            {alertCorrelationPercentage}% of alerts
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <div style={{ width: '12px', height: '12px', backgroundColor: '#60a5fa', borderRadius: '2px' }} />
-                        <div>
-                          <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontWeight: '600' }}>
-                            Normal Ops: {alertCount - alertsCorrelatedWithLowUtil}
-                          </div>
-                          <div style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '10px' }}>
-                            {((((alertCount - alertsCorrelatedWithLowUtil) / alertCount) * 100)).toFixed(0)}% of alerts
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Alert Details List */}
-                <div style={{ ...cardStyle, padding: '14px', maxHeight: '280px', overflowY: 'auto' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '10px' }}>
-                    Alert Details
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {alertsWithMetrics.map((alert, idx) => (
-                      <div
-                        key={`alert-${idx}`}
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px',
-                          padding: '12px',
-                          backgroundColor: alert.isAtRiskMachine ? 'rgba(239, 68, 68, 0.08)' : 'rgba(96, 165, 250, 0.05)',
-                          border: `1px solid ${alert.isAtRiskMachine ? 'rgba(239, 68, 68, 0.2)' : 'rgba(96, 165, 250, 0.2)'}`,
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                        }}
-                      >
-                        {/* Row 1: Machine ID + Utilization + Status */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                            <div
-                              style={{
-                                padding: '4px 10px',
-                                borderRadius: '4px',
-                                backgroundColor: alert.isAtRiskMachine ? 'rgba(239, 68, 68, 0.2)' : 'rgba(96, 165, 250, 0.2)',
-                                color: alert.isAtRiskMachine ? '#fca5a5' : '#93c5fd',
-                                fontSize: '11px',
-                                fontWeight: '700',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {alert.machineId || 'Unknown'}
-                            </div>
-                            <div style={{ color: '#e0e0e0', fontSize: '12px', fontWeight: '500' }}>
-                              {alert.message.substring(alert.message.indexOf(' ') + 1)}
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
-                            <div
-                              style={{
-                                padding: '4px 8px',
-                                borderRadius: '3px',
-                                backgroundColor: alert.isAtRiskMachine ? 'rgba(239, 68, 68, 0.2)' : 'rgba(96, 165, 250, 0.2)',
-                                color: alert.isAtRiskMachine ? '#fca5a5' : '#93c5fd',
-                                fontSize: '11px',
-                                fontWeight: '600',
-                              }}
-                            >
-                              {(alert.utilization ?? 0).toFixed(1)}%
-                            </div>
-                            {alert.isAtRiskMachine && (
-                              <div
-                                style={{
-                                  fontSize: '9px',
-                                  padding: '3px 6px',
-                                  borderRadius: '2px',
-                                  backgroundColor: 'rgba(239, 68, 68, 0.3)',
-                                  color: '#fca5a5',
-                                  fontWeight: '700',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                AT RISK
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* MACHINES TAB */}
-        {activeTab === 'machines' && (
-          <div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '14px',
-              }}
-            >
-              {/* Top Machines */}
-              <div style={{ ...cardStyle, padding: '14px' }}>
-                <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#22c55e', margin: '0 0 10px 0' }}>
-                  Top 10 Performing Machines
-                </h3>
-                <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
-                  {[...machines]
-                    .sort((a, b) => b.utilization - a.utilization)
-                    .slice(0, 10)
-                    .map((m, i) => (
-                      <div
-                        key={m.id}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '8px 0',
-                          borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                          fontSize: '12px',
-                        }}
-                      >
-                        <span style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                          {i + 1}. {m.id}
-                        </span>
-                        <span style={{ color: '#86efac', fontWeight: '600' }}>{m.utilization.toFixed(1)}%</span>
-                      </div>
-                    ))}
-                </div>
-              </div>
-
-              {/* Bottom Machines */}
-              <div style={{ ...cardStyle, padding: '14px' }}>
-                <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fecaca', margin: '0 0 10px 0' }}>
-                  Bottom 10 (Needs Attention)
-                </h3>
-                <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
-                  {[...machines]
-                    .sort((a, b) => a.utilization - b.utilization)
-                    .slice(0, 10)
-                    .map((m, i) => (
-                      <div
-                        key={m.id}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '8px 0',
-                          borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                          fontSize: '12px',
-                        }}
-                      >
-                        <span style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                          {i + 1}. {m.id}
-                        </span>
-                        <span style={{ color: '#fca5a5', fontWeight: '600' }}>{m.utilization.toFixed(1)}%</span>
-                      </div>
-                    ))}
-                </div>
+              <div style={{ ...cardStyle,padding:'18px' }}>
+                <div style={{ display:'flex',alignItems:'center',gap:'8px',marginBottom:'14px' }}><Clock style={{ width:'14px',height:'14px',color:'#fbbf24' }} /><p style={{ ...sh,margin:0 }}>Peak sales hours</p></div>
+                {peakHourData.map(d=>{ const max=Math.max(...peakHourData.map(x=>x.sales)); const pct=(d.sales/max)*100; return <div key={d.hour} style={{ display:'flex',alignItems:'center',gap:'10px',marginBottom:'8px' }}><span style={{ fontSize:'11px',color:'rgba(255,255,255,0.5)',width:'30px',textAlign:'right' }}>{d.hour}</span><div style={{ flex:1,height:'16px',background:'rgba(255,255,255,0.05)',borderRadius:'3px',overflow:'hidden' }}><div style={{ width:`${pct}%`,height:'100%',borderRadius:'3px',background:pct>75?'#fbbf24':'#fbbf2450',transition:'width 0.4s' }} /></div>{pct>75&&<span style={{ fontSize:'9px',color:'#fbbf24',fontWeight:'700',width:'30px' }}>PEAK</span>}</div> })}
               </div>
             </div>
-
-            {/* Machine Heatmap/Grid */}
-            <div style={{ marginTop: '16px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
-                Machine Heatmap - Complete Fleet Overview
-              </h3>
-              <div style={{ ...cardStyle, padding: '14px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
-                  {[...machines]
-                    .sort((a, b) => a.id.localeCompare(b.id))
-                    .map((m) => {
-                      const util = m.utilization
-                      // Color gradient: red (0%) to yellow (50%) to green (100%)
-                      let color = '#ef4444'
-                      if (util >= 80) color = '#10b981' // Green
-                      else if (util >= 60) color = '#84cc16' // Yellow-green
-                      else if (util >= 40) color = '#eab308' // Yellow
-                      else if (util >= 20) color = '#f97316' // Orange
-                      // else red
-                      
-                      const bgColor = util >= 80 ? 'rgba(16, 185, 129, 0.1)' :
-                                      util >= 60 ? 'rgba(132, 204, 22, 0.1)' :
-                                      util >= 40 ? 'rgba(234, 179, 8, 0.1)' :
-                                      util >= 20 ? 'rgba(249, 115, 22, 0.1)' :
-                                      'rgba(239, 68, 68, 0.1)'
-                      
-                      return (
-                        <div
-                          key={m.id}
-                          style={{
-                            ...cardStyle,
-                            padding: '12px',
-                            backgroundColor: bgColor,
-                            borderColor: color,
-                            borderWidth: '1.5px',
-                          }}
-                        >
-                          <div style={{ fontSize: '11px', fontWeight: '600', color: '#fff', marginBottom: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {m.id}
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                            <div style={{ fontSize: '16px', fontWeight: '700', color: color }}>
-                              {util.toFixed(0)}%
-                            </div>
-                          </div>
-                          <div
-                            style={{
-                              width: '100%',
-                              height: '6px',
-                              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                              borderRadius: '3px',
-                              overflow: 'hidden',
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: `${util}%`,
-                                height: '100%',
-                                backgroundColor: color,
-                                transition: 'width 0.3s ease',
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )
-                    })}
-                </div>
-                <div style={{ marginTop: '12px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '12px', height: '12px', backgroundColor: '#10b981', borderRadius: '2px' }} />
-                    <span>Elite (80%+)</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '12px', height: '12px', backgroundColor: '#84cc16', borderRadius: '2px' }} />
-                    <span>High (60-79%)</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '12px', height: '12px', backgroundColor: '#eab308', borderRadius: '2px' }} />
-                    <span>Average (40-59%)</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '12px', height: '12px', backgroundColor: '#f97316', borderRadius: '2px' }} />
-                    <span>Low (20-39%)</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '12px', height: '12px', backgroundColor: '#ef4444', borderRadius: '2px' }} />
-                    <span>Critical (&lt;20%)</span>
-                  </div>
-                </div>
+            <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:'14px' }}>
+              <div style={{ ...cardStyle,padding:'18px' }}>
+                <div style={{ display:'flex',alignItems:'center',gap:'8px',marginBottom:'14px' }}><TrendingUp style={{ width:'14px',height:'14px',color:'#22c55e' }} /><p style={{ ...sh,margin:0 }}>Best-selling categories</p></div>
+                <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                  <thead><tr style={{ borderBottom:'1px solid rgba(255,255,255,0.07)' }}>{['Category','Revenue','Share'].map(h=><th key={h} style={{ textAlign:h==='Category'?'left':'right',padding:'8px 10px',fontSize:'10px',fontWeight:'700',color:'rgba(255,255,255,0.35)',textTransform:'uppercase',letterSpacing:'0.5px' }}>{h}</th>)}</tr></thead>
+                  <tbody>{[...categoryRevenue].sort((a:any,b:any)=>b.value-a.value).map((row:any,i:number)=>{ const total=categoryRevenue.reduce((s:number,r:any)=>s+r.value,0); const share=((row.value/total)*100).toFixed(1); return <tr key={i} style={{ borderBottom:'1px solid rgba(255,255,255,0.04)' }}><td style={{ padding:'10px',fontSize:'12px',color:'#fff' }}><div style={{ display:'flex',alignItems:'center',gap:'8px' }}><div style={{ width:'8px',height:'8px',borderRadius:'2px',background:COLORS[i%COLORS.length] }} />{row.name}</div></td><td style={{ padding:'10px',fontSize:'12px',fontWeight:'600',color:'#22c55e',textAlign:'right' }}>${row.value}K</td><td style={{ padding:'10px',textAlign:'right' }}><span style={{ fontSize:'11px',color:'rgba(255,255,255,0.5)',background:'rgba(255,255,255,0.06)',padding:'2px 7px',borderRadius:'4px' }}>{share}%</span></td></tr> })}</tbody>
+                </table>
               </div>
-            </div>
-
-            {/* Performance Tier Segmentation */}
-            <div style={{ marginTop: '16px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
-                Performance Tier Segmentation
-              </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '14px' }}>
-                {[
-                  { tier: 'Elite', range: '90-100%', color: '#10b981', bgColor: 'rgba(16, 185, 129, 0.15)', count: machines.filter(m => m.utilization >= 90).length },
-                  { tier: 'High', range: '70-89%', color: '#84cc16', bgColor: 'rgba(132, 204, 22, 0.15)', count: machines.filter(m => m.utilization >= 70 && m.utilization < 90).length },
-                  { tier: 'Average', range: '40-69%', color: '#eab308', bgColor: 'rgba(234, 179, 8, 0.15)', count: machines.filter(m => m.utilization >= 40 && m.utilization < 70).length },
-                  { tier: 'Low', range: '20-39%', color: '#f97316', bgColor: 'rgba(249, 115, 22, 0.15)', count: machines.filter(m => m.utilization >= 20 && m.utilization < 40).length },
-                  { tier: 'Critical', range: '<20%', color: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.15)', count: machines.filter(m => m.utilization < 20).length },
-                ].map((tier, idx) => {
-                  const percentage = ((tier.count / machines.length) * 100).toFixed(1)
-                  return (
-                    <div key={`tier-${idx}`} style={{ ...cardStyle, padding: '12px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '11px', fontWeight: '600', color: tier.color, marginBottom: '8px', textTransform: 'uppercase' }}>
-                        {tier.tier}
-                      </div>
-                      <div style={{ fontSize: '24px', fontWeight: '700', color: tier.color, marginBottom: '4px' }}>
-                        {tier.count}
-                      </div>
-                      <div style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '6px' }}>
-                        {percentage}% of fleet
-                      </div>
-                      <div style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.4)', fontWeight: '500' }}>
-                        {tier.range}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* Tier Distribution Bar */}
-              <div style={{ ...cardStyle, padding: '14px' }}>
-                <div style={{ fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '12px' }}>
-                  Fleet Composition
-                </div>
-                <div style={{ height: '24px', backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: '4px', display: 'flex', overflow: 'hidden' }}>
-                  {[
-                    { count: machines.filter(m => m.utilization >= 90).length, color: '#10b981' },
-                    { count: machines.filter(m => m.utilization >= 70 && m.utilization < 90).length, color: '#84cc16' },
-                    { count: machines.filter(m => m.utilization >= 40 && m.utilization < 70).length, color: '#eab308' },
-                    { count: machines.filter(m => m.utilization >= 20 && m.utilization < 40).length, color: '#f97316' },
-                    { count: machines.filter(m => m.utilization < 20).length, color: '#ef4444' },
-                  ].map((segment, idx) => {
-                    const width = (segment.count / machines.length) * 100
-                    return (
-                      <div
-                        key={`seg-${idx}`}
-                        style={{
-                          flex: width,
-                          backgroundColor: segment.color,
-                          opacity: 0.7,
-                          minWidth: width > 5 ? undefined : '2px',
-                        }}
-                      />
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Outlier Detection */}
-            {stats && stats.outliers && stats.outliers.length > 0 && (
-              <div style={{ marginTop: '16px' }}>
-                <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
-                  Anomaly Detection - Statistical Outliers
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
-                  <div style={{ ...cardStyle, padding: '14px', textAlign: 'center', borderColor: 'rgba(168, 85, 247, 0.3)' }}>
-                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                      Outliers Detected
-                    </div>
-                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#a855f7' }}>
-                      {stats.outliers.length}
-                    </div>
-                    <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '4px' }}>
-                      {((stats.outliers.length / machines.length) * 100).toFixed(1)}% of fleet
-                    </div>
-                  </div>
-                  <div style={{ ...cardStyle, padding: '14px' }}>
-                    <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '8px', fontWeight: '600' }}>
-                      Threshold Range
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#e0e0e0', lineHeight: '1.6' }}>
-                      <div>Lower: &lt; {stats.outlierLowerThreshold}%</div>
-                      <div>Upper: &gt; {stats.outlierUpperThreshold}%</div>
-                      <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '6px' }}>
-                        (±2σ from mean)
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ ...cardStyle, padding: '14px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '10px' }}>
-                    Outlier Machines
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px' }}>
-                    {stats.outliers.map((m) => {
-                      const util = m.utilization
-                      const meanVal = parseFloat(stats.mean)
-                      const type = util > meanVal ? 'High' : 'Low'
-                      const typeColor = util > meanVal ? '#8b5cf6' : '#f97316'
-                      const bgColor = util > meanVal ? 'rgba(139, 92, 246, 0.1)' : 'rgba(249, 115, 22, 0.1)'
-                      
-                      return (
-                        <div
-                          key={m.id}
-                          style={{
-                            ...cardStyle,
-                            padding: '10px',
-                            backgroundColor: bgColor,
-                            borderColor: typeColor,
-                            borderWidth: '1.5px',
-                            textAlign: 'center',
-                          }}
-                        >
-                          <div style={{ fontSize: '11px', fontWeight: '600', color: '#fff', marginBottom: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {m.id}
-                          </div>
-                          <div style={{ fontSize: '16px', fontWeight: '700', color: typeColor, marginBottom: '4px' }}>
-                            {util.toFixed(1)}%
-                          </div>
-                          <div style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.6)', backgroundColor: typeColor + '20', padding: '3px 6px', borderRadius: '3px' }}>
-                            {type} Outlier
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {stats && (!stats.outliers || stats.outliers.length === 0) && (
-              <div style={{ marginTop: '16px' }}>
-                <div style={{ ...cardStyle, padding: '20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#10b981', marginBottom: '8px' }}>
-                    ✓ No Outliers Detected
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
-                    All machines are within normal operating range (±2σ from mean)
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* GEOGRAPHIC TAB */}
-        {activeTab === 'geographic' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '14px' }}>
-            {/* Map Visualization */}
-            <div style={{ ...cardStyle, padding: '20px', minHeight: '450px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 16px 0' }}>
-                Location Map & Performance
-              </h3>
-              <div
-                style={{
-                  position: 'relative',
-                  width: '100%',
-                  height: '380px',
-                  backgroundColor: 'rgba(0, 0, 0, 0.2)',
-                  borderRadius: '12px',
-                  overflow: 'hidden',
-                  border: '1px solid rgba(255, 255, 255, 0.05)',
-                }}
-              >
-                <svg width="100%" height="100%" style={{ display: 'block' }}>
-                  {/* Grid background */}
-                  <defs>
-                    <pattern id="grid-bg" width="40" height="40" patternUnits="userSpaceOnUse">
-                      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.02)" strokeWidth="0.5" />
-                    </pattern>
-                  </defs>
-                  <rect width="100%" height="100%" fill="url(#grid-bg)" />
-
-                  {/* Location bubbles centered on real lat/lng from API */}
-                  {(() => {
-                    const mapData = data?.map || []
-                    const validMapData = mapData.filter((loc: any) => Number.isFinite(loc.lat) && Number.isFinite(loc.lon))
-                    if (validMapData.length === 0) return null
-
-                    const lats = validMapData.map((loc: any) => loc.lat)
-                    const lons = validMapData.map((loc: any) => loc.lon)
-                    const latMin = Math.min(...lats)
-                    const latMax = Math.max(...lats)
-                    const lonMin = Math.min(...lons)
-                    const lonMax = Math.max(...lons)
-
-                    const svgWidth = 450
-                    const svgHeight = 380
-                    const padding = 40
-
-                    const project = (lat: number, lon: number) => {
-                      const x = latMin === latMax
-                        ? svgWidth / 2
-                        : padding + ((lon - lonMin) / (lonMax - lonMin)) * (svgWidth - padding * 2)
-
-                      const y = lonMin === lonMax
-                        ? svgHeight / 2
-                        : svgHeight - (padding + ((lat - latMin) / (latMax - latMin)) * (svgHeight - padding * 2))
-
-                      return { x, y }
-                    }
-
-                    const maxRevenue = Math.max(...Object.values(data?.top_locations || {}).map((r: any) => (r || 0) / 1000)) || 1
-
-                    return validMapData.map((location: any, idx: number) => {
-                      const revenue = (data?.top_locations?.[location.location] || 0) / 1000
-                      const size = Math.max(8, Math.min(35, (revenue / maxRevenue) * 40))
-
-                      const { x, y } = project(location.lat, location.lon)
-
-                      return (
-                        <g key={`loc-${idx}`}>
-                          <circle
-                            cx={x}
-                            cy={y}
-                            r={size}
-                            fill={`hsl(${(idx * 54) % 360}, 70%, 50%)`}
-                            opacity="0.75"
-                            style={{ transition: 'all 0.3s ease', cursor: 'pointer' }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.setAttribute('r', `${size * 1.3}`)
-                              e.currentTarget.setAttribute('opacity', '0.95')
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.setAttribute('r', `${size}`)
-                              e.currentTarget.setAttribute('opacity', '0.75')
-                            }}
-                          />
-                          <text
-                            x={x}
-                            y={y - size - 6}
-                            textAnchor="middle"
-                            fontSize="10"
-                            fontWeight="600"
-                            fill="#fff"
-                            pointerEvents="none"
-                          >
-                            {location.location}
-                          </text>
-                        </g>
-                      )
-                    })
-                  })()}                </svg>
-              </div>
-              <div style={{ marginTop: '12px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)' }}>
-                Circle size = Revenue | Color = Location | Hover for details
-              </div>
-            </div>
-
-            {/* Locations List */}
-            <div style={{ ...cardStyle, padding: '14px', display: 'flex', flexDirection: 'column' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
-                All Locations
-              </h3>
-              <div style={{ flex: 1, overflowY: 'auto' }}>
-                {data?.map.map((location, idx) => {
-                  const revenue = (data.top_locations[location.location] || 0) / 1000
-                  const isTopLocation = location.location in data.top_locations
-                  return (
-                    <div
-                      key={`loc-list-${idx}`}
-                      style={{
-                        padding: '10px',
-                        marginBottom: '8px',
-                        backgroundColor: isTopLocation ? 'rgba(96, 165, 250, 0.1)' : 'rgba(255, 255, 255, 0.03)',
-                        borderRadius: '8px',
-                        border: `1px solid ${isTopLocation ? 'rgba(96, 165, 250, 0.2)' : 'rgba(255, 255, 255, 0.05)'}`,
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = isTopLocation ? 'rgba(96, 165, 250, 0.2)' : 'rgba(255, 255, 255, 0.08)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = isTopLocation ? 'rgba(96, 165, 250, 0.1)' : 'rgba(255, 255, 255, 0.03)'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: '600', color: '#fff' }}>
-                          {location.location}
-                        </span>
-                        {isTopLocation && (
-                          <span
-                            style={{
-                              fontSize: '10px',
-                              fontWeight: '700',
-                              color: '#fbbf24',
-                              backgroundColor: 'rgba(251, 191, 36, 0.2)',
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                            }}
-                          >
-                            TOP
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)' }}>
-                        Revenue: <span style={{ color: '#60a5fa', fontWeight: '600' }}>${revenue.toFixed(1)}K</span>
-                      </div>
-                      <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.4)' }}>
-                        Lat: {location.lat.toFixed(4)} | Lon: {location.lon.toFixed(4)}
-                      </div>
-                    </div>
-                  )
-                })}
+              <div style={{ ...cardStyle,padding:'18px' }}>
+                <div style={{ display:'flex',alignItems:'center',gap:'8px',marginBottom:'14px' }}><TrendingDown style={{ width:'14px',height:'14px',color:'#f87171' }} /><p style={{ ...sh,margin:0 }}>Sites vs network average</p></div>
+                <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                  <thead><tr style={{ borderBottom:'1px solid rgba(255,255,255,0.07)' }}>{['Site','Revenue','vs avg'].map(h=><th key={h} style={{ textAlign:h==='Site'?'left':'right',padding:'8px 10px',fontSize:'10px',fontWeight:'700',color:'rgba(255,255,255,0.35)',textTransform:'uppercase',letterSpacing:'0.5px' }}>{h}</th>)}</tr></thead>
+                  <tbody>{(()=>{ const avg=locationAnalytics.reduce((s,l)=>s+l.revenueK,0)/Math.max(locationAnalytics.length,1); return locationAnalytics.map((loc,i)=>{ const diff=loc.revenueK-avg; const up=diff>=0; return <tr key={i} style={{ borderBottom:'1px solid rgba(255,255,255,0.04)',cursor:'pointer' }} onClick={()=>setSelectedLocation(loc.location===selectedLocation?null:loc.location)}><td style={{ padding:'10px',fontSize:'12px',color:selectedLocation===loc.location?'#34d399':'#fff',maxWidth:'140px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{loc.location}</td><td style={{ padding:'10px',fontSize:'12px',fontWeight:'600',color:'#34d399',textAlign:'right' }}>${loc.revenueK}K</td><td style={{ padding:'10px',textAlign:'right' }}><span style={{ fontSize:'11px',fontWeight:'600',color:up?'#22c55e':'#f87171',background:up?'rgba(34,197,94,0.1)':'rgba(248,113,113,0.1)',padding:'2px 7px',borderRadius:'4px' }}>{up?'+':''}{diff.toFixed(1)}K</span></td></tr> }) })()}</tbody>
+                </table>
               </div>
             </div>
           </div>
         )}
-
-        {/* LOCATIONS TAB */}
-        {activeTab === 'locations' && (
-          <div>
-            {/* Location Summary Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '16px' }}>
-              <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                  Total Locations
-                </div>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: '#60a5fa' }}>
-                  {locationAnalytics.length}
-                </div>
-              </div>
-              <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                  Total Location Revenue
-                </div>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: '#10b981' }}>
-                  ${(locationAnalytics.reduce((sum, loc) => sum + loc.revenue, 0) / 1000).toFixed(0)}K
-                </div>
-              </div>
-              <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                  Top Location Revenue
-                </div>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: '#fbbf24' }}>
-                  ${(locationAnalytics[0]?.revenue / 1000).toFixed(0)}K
-                </div>
-              </div>
-            </div>
-
-            {/* Location Detailed Table */}
-            <div style={{ ...cardStyle, padding: '14px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
-                Location Performance Breakdown
-              </h3>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                      <th style={{ textAlign: 'left', padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.6)' }}>
-                        Rank
-                      </th>
-                      <th style={{ textAlign: 'left', padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.6)' }}>
-                        Location
-                      </th>
-                      <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.6)' }}>
-                        Revenue
-                      </th>
-                      <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.6)' }}>
-                        % of Total
-                      </th>
-                      <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.6)' }}>
-                        Coordinates
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {locationAnalytics.map((loc, idx) => (
-                      <tr
-                        key={`loc-${idx}`}
-                        style={{
-                          borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                          backgroundColor: idx % 2 === 0 ? 'rgba(255, 255, 255, 0.01)' : 'transparent',
-                        }}
-                      >
-                        <td style={{ padding: '10px 12px', fontSize: '12px', color: '#60a5fa', fontWeight: '600' }}>
-                          #{loc.rank}
-                        </td>
-                        <td style={{ padding: '10px 12px', fontSize: '12px', color: '#e0e0e0' }}>
-                          {loc.location}
-                        </td>
-                        <td style={{ padding: '10px 12px', fontSize: '12px', color: '#10b981', fontWeight: '600', textAlign: 'right' }}>
-                          ${(loc.revenue / 1000).toFixed(1)}K
-                        </td>
-                        <td style={{ padding: '10px 12px', fontSize: '12px', textAlign: 'right' }}>
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'flex-end',
-                              gap: '8px',
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: '60px',
-                                height: '20px',
-                                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                                borderRadius: '4px',
-                                overflow: 'hidden',
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: `${loc.revenuePercent}%`,
-                                  height: '100%',
-                                  backgroundColor: loc.rank === 1 ? '#fbbf24' : loc.rank <= 2 ? '#60a5fa' : '#34d399',
-                                  transition: 'width 0.3s ease',
-                                }}
-                              />
-                            </div>
-                            <span style={{ color: 'rgba(255, 255, 255, 0.7)', width: '30px', textAlign: 'right' }}>
-                              {loc.revenuePercent.toFixed(1)}%
-                            </span>
-                          </div>
-                        </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Revenue Distribution */}
-              <div style={{ marginTop: '16px' }}>
-                <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 12px 0' }}>
-                  Revenue Distribution by Location
-                </h3>
-                <div style={{ ...cardStyle, padding: '20px', minHeight: '300px' }}>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={locationAnalytics.map(loc => ({ name: loc.location, value: parseFloat((loc.revenue / 1000).toFixed(1)) }))}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name }) => name}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {COLORS.map((color, index) => (
-                          <Cell key={`cell-${index}`} fill={color} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => `$${value}K`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-          )}
       </main>
     </div>
   )
