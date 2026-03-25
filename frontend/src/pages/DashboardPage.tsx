@@ -85,8 +85,8 @@ const DashboardPage: React.FC = () => {
 
   const locationAnalytics = React.useMemo(() => {
     if (!data) return []
-    const total = Object.values(data.top_locations as Record<string, number>).reduce((s, v) => s + v, 0)
-    return Object.entries(data.top_locations as Record<string, number>)
+    const total = Object.values(data.all_locations_revenue as Record<string, number>).reduce((s, v) => s + v, 0)
+    return Object.entries(data.all_locations_revenue as Record<string, number>)
       .sort(([, a], [, b]) => b - a)
       .map(([location, revenue], idx) => ({ rank: idx + 1, location, revenue, revenueK: parseFloat((revenue / 1000).toFixed(1)), share: parseFloat(((revenue / total) * 100).toFixed(1)) }))
   }, [data])
@@ -443,7 +443,7 @@ const DashboardPage: React.FC = () => {
                 <p style={sh}>Machine locations — click a pin to filter</p>
                 <div style={{ flex:1,borderRadius:'10px',overflow:'hidden',minHeight:'300px' }}>
                   {data?.map && data.map.length > 0
-                    ? <LocationMap locations={data.map.map((loc:any)=>({ location:loc.location, revenue:((data.top_locations?.[loc.location]??0)/1000), latitude:loc.lat, longitude:loc.lon }))} />
+                    ? <LocationMap locations={data.map.map((loc:any)=>({ location:loc.location, revenue:((data.all_locations_revenue?.[loc.location]??0)/1000), latitude:loc.lat, longitude:loc.lon }))} />
                     :<div style={{ display:'flex',alignItems:'center',justifyContent:'center',height:'300px',color:'rgba(255,255,255,0.4)' }}>No location data</div>}
                 </div>
               </div>
