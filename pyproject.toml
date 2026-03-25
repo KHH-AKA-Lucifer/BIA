@@ -1,6 +1,6 @@
 [project]
 name = "datadashboardbackend"
-version = "0.1.0"
+version = "0.2.0"
 description = "backend for datadashboard"
 authors = [
     {name = "Kaung Hein Htet",email = "kaungheinhtetutycc@gmail.com"}
