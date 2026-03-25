@@ -14,7 +14,7 @@ class MachineLocationResponse(BaseModel):
 
 class DashboardSummaryResponse(BaseModel):
     revenue_by_category: ChartDataResponse
-    weekly_profit: ChartDataResponse
+    profit_trend: ChartDataResponse
     top_locations: dict[str, float]
     all_locations_revenue: dict[str, float]
     machine_utilization: dict[str, float]

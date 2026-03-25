@@ -30,10 +30,10 @@ type TabType = 'executive' | 'machines' | 'geographic' | 'locations' | 'analytic
 
 const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth()
-  const { data, loading, error, refresh } = useDashboard()
+  const [dateRange, setDateRange] = React.useState<'week' | 'month' | 'quarter'>('week')
+  const { data, loading, error, refresh } = useDashboard(dateRange)
 
   const [activeTab, setActiveTab] = React.useState<TabType>('executive')
-  const [dateRange, setDateRange] = React.useState<'week' | 'month' | 'quarter'>('week')
   const [selectedLocation, setSelectedLocation] = React.useState<string | null>(null)
   const [machineStatus, setMachineStatus] = React.useState<'all' | 'healthy' | 'warning' | 'critical'>('all')
 
@@ -74,36 +74,48 @@ const DashboardPage: React.FC = () => {
     ? data.revenue_by_category.labels.map((label: string, idx: number) => ({
         name: label,
         value: data.revenue_by_category.values[idx],
+        percent: totalRevenue > 0 ? (data.revenue_by_category.values[idx] / totalRevenue) * 100 : 0,
       }))
     : []
 
-  // Weekly profit data (line chart)
-  const weeklyProfitData = data
-    ? data.weekly_profit.labels.map((label: string, idx: number) => ({
-        week: label,
-        profit: data.weekly_profit.values[idx] / 1000,
+  const periodLabels = {
+    week: 'Week',
+    month: 'Month',
+    quarter: 'Quarter',
+  } as const
+
+  const periodAdjectives = {
+    week: 'Weekly',
+    month: 'Monthly',
+    quarter: 'Quarterly',
+  } as const
+
+  const profitTrendData = data?.profit_trend
+    ? data.profit_trend.labels.map((label: string, idx: number) => ({
+        period: label,
+        profit: data.profit_trend.values[idx] / 1000,
       }))
     : []
 
   // Profit trend metrics
   const getProfitMetrics = () => {
-    if (!data || !data.weekly_profit.values.length) return null
+    if (!data?.profit_trend.values.length) return null
     
-    const profits = data.weekly_profit.values
-    const labels = data.weekly_profit.labels
+    const profits = data.profit_trend.values
+    const labels = data.profit_trend.labels
     
     const totalProfit = profits.reduce((sum, val) => sum + val, 0)
     const avgProfit = totalProfit / profits.length
     const maxProfit = Math.max(...profits)
     const minProfit = Math.min(...profits)
-    const maxDay = labels[profits.indexOf(maxProfit)]
-    const minDay = labels[profits.indexOf(minProfit)]
+    const maxPeriod = labels[profits.indexOf(maxProfit)]
+    const minPeriod = labels[profits.indexOf(minProfit)]
     
-    // Calculate day-over-day changes
+    // Calculate period-over-period changes
     const changes = []
     for (let i = 1; i < profits.length; i++) {
       const change = profits[i] - profits[i - 1]
-      const percentChange = ((change / profits[i - 1]) * 100)
+      const percentChange = profits[i - 1] === 0 ? 0 : (change / profits[i - 1]) * 100
       changes.push({
         from: labels[i - 1],
         to: labels[i],
@@ -113,27 +125,32 @@ const DashboardPage: React.FC = () => {
     }
     
     // Trend: overall direction
-    const firstHalf = profits.slice(0, Math.ceil(profits.length / 2)).reduce((a, b) => a + b, 0) / Math.ceil(profits.length / 2)
-    const secondHalf = profits.slice(Math.ceil(profits.length / 2)).reduce((a, b) => a + b, 0) / Math.floor(profits.length / 2)
-    const weekOverWeekChange = secondHalf - firstHalf
-    const weekOverWeekPercent = ((weekOverWeekChange / firstHalf) * 100)
+    const midpoint = Math.ceil(profits.length / 2)
+    const firstHalfValues = profits.slice(0, midpoint)
+    const secondHalfValues = profits.slice(midpoint)
+    const firstHalf = firstHalfValues.reduce((a, b) => a + b, 0) / firstHalfValues.length
+    const secondHalf = secondHalfValues.length
+      ? secondHalfValues.reduce((a, b) => a + b, 0) / secondHalfValues.length
+      : firstHalf
+    const periodOverPeriodChange = secondHalf - firstHalf
+    const periodOverPeriodPercent = firstHalf === 0 ? 0 : (periodOverPeriodChange / firstHalf) * 100
     
     // Volatility (standard deviation)
     const variance = profits.reduce((sum, val) => sum + Math.pow(val - avgProfit, 2), 0) / profits.length
     const stdDev = Math.sqrt(variance)
-    const cv = (stdDev / avgProfit) * 100
+    const cv = avgProfit === 0 ? 0 : (stdDev / avgProfit) * 100
     
     return {
       totalProfit,
       avgProfit,
       maxProfit,
       minProfit,
-      maxDay,
-      minDay,
-      weekOverWeekChange,
-      weekOverWeekPercent,
+      maxPeriod,
+      minPeriod,
+      periodOverPeriodChange,
+      periodOverPeriodPercent,
       volatility: cv,
-      dayOverDayChanges: changes,
+      periodOverPeriodChanges: changes,
     }
   }
   
@@ -432,7 +449,7 @@ const DashboardPage: React.FC = () => {
         <div style={{ maxWidth: '1600px', margin: '0 auto', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Date Range Slicer */}
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500' }}>📅 Period:</span>
+            <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500' }}>Period:</span>
             {(['week', 'month', 'quarter'] as const).map(period => (
               <button
                 key={period}
@@ -456,7 +473,7 @@ const DashboardPage: React.FC = () => {
 
           {/* Location Slicer */}
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500' }}>📍 Location:</span>
+            <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500' }}>Location:</span>
             <select
               value={selectedLocation || ''}
               onChange={(e) => setSelectedLocation(e.target.value || null)}
@@ -479,7 +496,7 @@ const DashboardPage: React.FC = () => {
 
           {/* Machine Status Slicer */}
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500' }}>🔧 Status:</span>
+            <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500' }}>Status:</span>
             {(['all', 'healthy', 'warning', 'critical'] as const).map(status => (
               <button
                 key={status}
@@ -529,7 +546,7 @@ const DashboardPage: React.FC = () => {
               marginLeft: 'auto',
             }}
           >
-            🔄 Reset
+            Reset
           </button>
         </div>
       </div>
@@ -582,46 +599,82 @@ const DashboardPage: React.FC = () => {
               {/* Revenue Distribution Pie */}
               <div style={{ ...cardStyle, padding: '14px' }}>
                 <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 10px 0' }}>
-                  Revenue by Category
+                  {periodAdjectives[dateRange]} Revenue by Category
                 </h3>
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie
-                      data={revenuePieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={40}
-                      outerRadius={65}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {revenuePieData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value: any) => `$${(value / 1000).toFixed(1)}K`}
-                      contentStyle={{
-                        backgroundColor: 'rgba(26, 26, 46, 0.95)',
-                        border: '1px solid rgba(96, 165, 250, 0.3)',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        fontSize: '12px',
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.85fr', gap: '12px', alignItems: 'center' }}>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart key={dateRange}>
+                      <Pie
+                        data={revenuePieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={40}
+                        outerRadius={65}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {revenuePieData.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: any) => `$${(value / 1000).toFixed(1)}K`}
+                        contentStyle={{
+                          backgroundColor: 'rgba(26, 26, 46, 0.95)',
+                          border: '1px solid rgba(96, 165, 250, 0.3)',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          fontSize: '12px',
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {revenuePieData.map((item, index) => (
+                      <div
+                        key={`${dateRange}-${item.name}`}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '10px 1fr auto',
+                          gap: '8px',
+                          alignItems: 'center',
+                          fontSize: '11px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '999px',
+                            backgroundColor: COLORS[index % COLORS.length],
+                          }}
+                        />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: '#fff', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {item.name}
+                          </div>
+                          <div style={{ color: 'rgba(255, 255, 255, 0.5)' }}>
+                            {item.percent.toFixed(1)}%
+                          </div>
+                        </div>
+                        <div style={{ color: '#93c5fd', fontWeight: 600 }}>
+                          ${(item.value / 1000).toFixed(1)}K
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
-              {/* Weekly Profit Trend */}
+              {/* Profit Trend */}
               <div style={{ ...cardStyle, padding: '14px' }}>
                 <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#fff', margin: '0 0 10px 0' }}>
-                  Weekly Profit Trend
+                  {periodAdjectives[dateRange]} Profit Trend
                 </h3>
                 <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={weeklyProfitData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                  <LineChart data={profitTrendData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.08)" />
-                    <XAxis dataKey="week" stroke="rgba(255, 255, 255, 0.4)" style={{ fontSize: '10px' }} />
+                    <XAxis dataKey="period" stroke="rgba(255, 255, 255, 0.4)" style={{ fontSize: '10px' }} />
                     <YAxis stroke="rgba(255, 255, 255, 0.4)" style={{ fontSize: '10px' }} />
                     <Tooltip
                       formatter={(value: any) => `$${value.toFixed(1)}K`}
@@ -779,7 +832,7 @@ const DashboardPage: React.FC = () => {
                 }}
               >
                 <span style={{ fontSize: '13px', color: '#fca5a5' }}>
-                  ⚠️ {alertCount} active alert{alertCount !== 1 ? 's' : ''} detected • {alertsCorrelatedWithLowUtil} correlated with low utilization
+                  {alertCount} active alert{alertCount !== 1 ? 's' : ''} detected • {alertsCorrelatedWithLowUtil} correlated with low utilization
                 </span>
                 <button
                   onClick={() => setActiveTab('analytics')}
@@ -815,7 +868,7 @@ const DashboardPage: React.FC = () => {
                 }}
               >
                 <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#a5f3fc', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  📊 Statistical Analysis
+                  Statistical Analysis
                 </h3>
                 <div
                   style={{
@@ -937,19 +990,19 @@ const DashboardPage: React.FC = () => {
                 padding: '16px',
               }}>
                 <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#86efac', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  💰 Profit Trend Analysis
+                  Profit Trend Analysis
                 </h3>
                 
                 {/* Profit Trend Line Chart */}
                 <div style={{ ...cardStyle, padding: '20px', marginBottom: '14px', minHeight: '250px' }}>
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart
-                      data={weeklyProfitData}
+                      data={profitTrendData}
                       margin={{ top: 10, right: 20, left: -10, bottom: 0 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
                       <XAxis 
-                        dataKey="week" 
+                        dataKey="period" 
                         stroke="rgba(255, 255, 255, 0.4)"
                         style={{ fontSize: '11px' }}
                       />
@@ -986,68 +1039,68 @@ const DashboardPage: React.FC = () => {
                   {/* Total Profit */}
                   <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
                     <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                      Total Weekly Profit
+                      Total {periodAdjectives[dateRange]} Profit
                     </div>
                     <div style={{ fontSize: '20px', fontWeight: '700', color: '#10b981', marginBottom: '4px' }}>
                       ${(profitMetrics.totalProfit / 1000).toFixed(1)}K
                     </div>
                     <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)' }}>
-                      {profitMetrics.dayOverDayChanges.length} days
+                      {profitMetrics.periodOverPeriodChanges.length + 1} {periodLabels[dateRange].toLowerCase()}s
                     </div>
                   </div>
 
-                  {/* Best Day */}
+                  {/* Best Period */}
                   <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
                     <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                      Best Day
+                      Best {periodLabels[dateRange]}
                     </div>
                     <div style={{ fontSize: '20px', fontWeight: '700', color: '#86efac', marginBottom: '4px' }}>
                       ${(profitMetrics.maxProfit / 1000).toFixed(1)}K
                     </div>
                     <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', fontWeight: '500' }}>
-                      {profitMetrics.maxDay}
+                      {profitMetrics.maxPeriod}
                     </div>
                   </div>
 
-                  {/* Worst Day */}
+                  {/* Worst Period */}
                   <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
                     <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                      Worst Day
+                      Worst {periodLabels[dateRange]}
                     </div>
                     <div style={{ fontSize: '20px', fontWeight: '700', color: '#fca5a5', marginBottom: '4px' }}>
                       ${(profitMetrics.minProfit / 1000).toFixed(1)}K
                     </div>
                     <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', fontWeight: '500' }}>
-                      {profitMetrics.minDay}
+                      {profitMetrics.minPeriod}
                     </div>
                   </div>
 
-                  {/* Week-over-Week Change */}
+                  {/* Trend Comparison */}
                   <div style={{ ...cardStyle, padding: '14px', textAlign: 'center' }}>
                     <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
                       Trend (1st vs 2nd Half)
                     </div>
-                    <div style={{ fontSize: '20px', fontWeight: '700', color: profitMetrics.weekOverWeekChange >= 0 ? '#86efac' : '#fca5a5', marginBottom: '4px' }}>
-                      {profitMetrics.weekOverWeekPercent.toFixed(1)}%
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: profitMetrics.periodOverPeriodChange >= 0 ? '#86efac' : '#fca5a5', marginBottom: '4px' }}>
+                      {profitMetrics.periodOverPeriodPercent.toFixed(1)}%
                     </div>
                     <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)' }}>
-                      {profitMetrics.weekOverWeekChange >= 0 ? '📈 Improving' : '📉 Declining'}
+                      {profitMetrics.periodOverPeriodChange >= 0 ? 'Improving' : 'Declining'}
                     </div>
                   </div>
                 </div>
 
-                {/* Day-over-Day Changes - Bar Chart */}
+                {/* Period-over-Period Changes - Bar Chart */}
                 <div style={{ 
                   ...cardStyle, 
                   padding: '20px',
                   minHeight: '280px',
                 }}>
                   <div style={{ fontSize: '12px', fontWeight: '600', color: '#f97316', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    📈 Daily Changes
+                    {`${periodLabels[dateRange]}-to-${periodLabels[dateRange]} Changes`}
                   </div>
                   <ResponsiveContainer width="100%" height={240}>
                     <BarChart
-                      data={profitMetrics.dayOverDayChanges.map(change => ({
+                      data={profitMetrics.periodOverPeriodChanges.map(change => ({
                         name: `${change.from}→${change.to}`,
                         change: parseFloat((change.change / 1000).toFixed(1)),
                         percent: parseFloat(change.percentChange.toFixed(1)),
@@ -1099,7 +1152,7 @@ const DashboardPage: React.FC = () => {
                 padding: '16px',
               }}>
                 <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#fca5a5', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  ⚠️ Alert Correlation Analysis
+                  Alert Correlation Analysis
                 </h3>
                 
                 {/* Alert Distribution Bar */}
@@ -1551,7 +1604,7 @@ const DashboardPage: React.FC = () => {
               <div style={{ marginTop: '16px' }}>
                 <div style={{ ...cardStyle, padding: '20px', textAlign: 'center' }}>
                   <div style={{ fontSize: '13px', fontWeight: '600', color: '#10b981', marginBottom: '8px' }}>
-                    ✓ No Outliers Detected
+                    No Outliers Detected
                   </div>
                   <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
                     All machines are within normal operating range (±2σ from mean)

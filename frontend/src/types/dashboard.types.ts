@@ -3,7 +3,7 @@ export interface DashboardSummary {
     labels: string[]
     values: number[]
   }
-  weekly_profit: {
+  profit_trend: {
     labels: string[]
     values: number[]
   }
