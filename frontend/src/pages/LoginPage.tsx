@@ -44,11 +44,6 @@ const LoginPage: React.FC = () => {
     }
   }
 
-  const handleDemoLogin = () => {
-    setEmail('admin@test.com')
-    setPassword('NewPassword123!')
-  }
-
   return (
     <div style={{
       minHeight: '100vh',
@@ -88,7 +83,7 @@ const LoginPage: React.FC = () => {
       {/* Main Card */}
       <div style={{
         width: '100%',
-        maxWidth: '420px',
+        maxWidth: '480px',
         position: 'relative',
         zIndex: 10
       }}>
@@ -97,53 +92,26 @@ const LoginPage: React.FC = () => {
           textAlign: 'center',
           marginBottom: '2.5rem'
         }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.75rem',
-            marginBottom: '1rem'
+          <h1 style={{
+            fontSize: '34px',
+            fontWeight: 900,
+            lineHeight: 1.15,
+            background: 'linear-gradient(135deg, #93c5fd 0%, #dbeafe 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            margin: '0 0 0.75rem',
+            letterSpacing: '-0.5px'
           }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 10px 25px rgba(59, 130, 246, 0.3)'
-            }}>
-              <span style={{ fontSize: '20px', fontWeight: 'bold', color: 'white' }}>⚡</span>
-            </div>
-            <h1 style={{
-              fontSize: '32px',
-              fontWeight: 900,
-              background: 'linear-gradient(135deg, #93c5fd 0%, #dbeafe 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              margin: 0,
-              letterSpacing: '-0.5px'
-            }}>
-              BIA
-            </h1>
-          </div>
+            Vending Machine Analytic Dashboard
+          </h1>
           <p style={{
-            fontSize: '16px',
-            fontWeight: 500,
-            color: '#cbd5e1',
-            margin: '0.5rem 0 0.25rem'
-          }}>
-            Business Intelligence & Analysis
-          </p>
-          <p style={{
-            fontSize: '13px',
+            fontSize: '14px',
             fontWeight: 400,
             color: '#94a3b8',
             margin: 0
           }}>
-            Vending Machine Analytics Dashboard
+            Sign in to continue
           </p>
         </div>
 
@@ -187,7 +155,7 @@ const LoginPage: React.FC = () => {
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} style={{ marginBottom: '1.5rem' }}>
+          <form onSubmit={handleSubmit}>
             {/* Email Field */}
             <div style={{ marginBottom: '1.25rem' }}>
               <label style={{
@@ -218,7 +186,7 @@ const LoginPage: React.FC = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@test.com"
+                  placeholder="Enter your email"
                   disabled={loading}
                   style={{
                     width: '100%',
@@ -280,7 +248,7 @@ const LoginPage: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder="Enter your password"
                   disabled={loading}
                   style={{
                     width: '100%',
@@ -383,102 +351,6 @@ const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Demo Section */}
-          <div style={{
-            borderTop: '1px solid rgba(148, 163, 184, 0.1)',
-            paddingTop: '1.5rem'
-          }}>
-            <p style={{
-              fontSize: '11px',
-              fontWeight: 700,
-              color: '#94a3b8',
-              textTransform: 'uppercase',
-              letterSpacing: '0.75px',
-              marginBottom: '0.75rem',
-              margin: '0 0 0.75rem'
-            }}>
-              Demo Credentials
-            </p>
-            <div style={{
-              background: 'rgba(15, 23, 42, 0.6)',
-              border: '1px solid rgba(148, 163, 184, 0.1)',
-              borderRadius: '8px',
-              padding: '1rem',
-              marginBottom: '1rem'
-            }}>
-              <div style={{ marginBottom: '0.75rem' }}>
-                <p style={{
-                  fontSize: '11px',
-                  color: '#94a3b8',
-                  fontWeight: 500,
-                  margin: '0 0 0.25rem'
-                }}>
-                  Email
-                </p>
-                <code style={{
-                  display: 'block',
-                  fontSize: '12px',
-                  color: '#93c5fd',
-                  fontFamily: 'Menlo, Monaco, Courier New, monospace',
-                  background: 'transparent',
-                  wordBreak: 'break-all'
-                }}>
-                  admin@test.com
-                </code>
-              </div>
-              <div>
-                <p style={{
-                  fontSize: '11px',
-                  color: '#94a3b8',
-                  fontWeight: 500,
-                  margin: '0 0 0.25rem'
-                }}>
-                  Password
-                </p>
-                <code style={{
-                  display: 'block',
-                  fontSize: '12px',
-                  color: '#93c5fd',
-                  fontFamily: 'Menlo, Monaco, Courier New, monospace',
-                  background: 'transparent'
-                }}>
-                  NewPassword123!
-                </code>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleDemoLogin}
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '9px 12px',
-                background: 'rgba(59, 130, 246, 0.15)',
-                color: '#93c5fd',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s ease',
-                opacity: loading ? 0.5 : 1
-              }}
-              onMouseEnter={(e) => {
-                if (!loading) {
-                  e.currentTarget.style.background = 'rgba(59, 130, 246, 0.25)'
-                  e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)'
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!loading) {
-                  e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)'
-                  e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.3)'
-                }
-              }}
-            >
-              Auto-fill Credentials
-            </button>
-          </div>
         </div>
 
         {/* Footer */}
@@ -490,7 +362,7 @@ const LoginPage: React.FC = () => {
           fontWeight: 500,
           margin: '1.5rem 0 0'
         }}>
-          © 2026 BIA • Business Intelligence & Analysis
+          © 2026 Vending Machine Analytic Dashboard
         </p>
       </div>
 
