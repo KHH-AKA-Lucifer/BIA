@@ -14,10 +14,10 @@ import {
 } from './CustomCharts'
 import {
   LogOut, RefreshCw, AlertCircle, LayoutDashboard, Cpu, MapPin,
-  ChevronRight, TrendingUp, TrendingDown, Package, Clock,
+  ChevronRight, TrendingUp, TrendingDown, Package, Clock, CheckCircle,
 } from 'lucide-react'
 import {
-  PieChart, Pie, Cell,
+  Cell,
   LineChart, Line,
   BarChart, Bar,
   AreaChart, Area,
@@ -76,6 +76,7 @@ const DashboardPage: React.FC = () => {
     return { pct: pct.toFixed(1), up: pct >= 0 }
   })()
   const comparisonLabel = dateRange === 'week' ? 'vs previous day' : dateRange === 'month' ? 'vs previous week' : 'vs previous month'
+  const timeBucketLabel = dateRange === 'week' ? 'Day' : dateRange === 'month' ? 'Week' : 'Month'
 
   const stackedAreaData = weeklyProfitData.map(d => ({
     day: d.day,
@@ -234,15 +235,17 @@ const DashboardPage: React.FC = () => {
                 </ResponsiveContainer>
               </div>
               <div style={{ ...cardStyle, padding: '18px' }}>
-                <p style={sh}>Sales by category</p>
+                <p style={sh}>{`Revenue by ${timeBucketLabel.toLowerCase()}`}</p>
                 <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie data={categoryRevenue} cx="50%" cy="48%" innerRadius={40} outerRadius={68} paddingAngle={3} dataKey="value">
-                      {categoryRevenue.map((_:any,i:number)=><Cell key={i} fill={COLORS[i%COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip contentStyle={ttStyle} formatter={(v:any)=>[`$${v}K`]} />
-                    <Legend iconSize={8} wrapperStyle={{ fontSize:'10px',color:'rgba(255,255,255,0.5)' }} />
-                  </PieChart>
+                  <BarChart data={weeklyProfitData} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="day" stroke="rgba(255,255,255,0.3)" style={{ fontSize: '10px' }} />
+                    <YAxis stroke="rgba(255,255,255,0.3)" style={{ fontSize: '10px' }} tickFormatter={v=>`$${v}K`} />
+                    <Tooltip contentStyle={ttStyle} formatter={(v:any)=>[`$${Number(v).toFixed(1)}K`,'Revenue']} />
+                    <Bar dataKey="revenue" radius={[4, 4, 0, 0]} name="Revenue">
+                      {weeklyProfitData.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -258,7 +261,7 @@ const DashboardPage: React.FC = () => {
                       <div style={{ height:'6px',background:'rgba(255,255,255,0.07)',borderRadius:'3px',overflow:'hidden' }}><div style={{ width:`${machines.length?(item.count/machines.length)*100:0}%`,height:'100%',background:item.color,borderRadius:'3px',transition:'width 0.5s' }} /></div>
                     </div>
                   ))}
-                  <div style={{ fontSize:'10px',color:'rgba(255,255,255,0.25)',textAlign:'center',marginTop:'4px' }}>Click any row to filter machines →</div>
+                  <div style={{ fontSize:'10px',color:'rgba(255,255,255,0.25)',textAlign:'center',marginTop:'4px' }}>Click any row to filter machines</div>
                 </div>
               </div>
               <div style={{ ...cardStyle, padding: '18px' }}>
@@ -267,14 +270,14 @@ const DashboardPage: React.FC = () => {
                   {alertCount>0&&<button onClick={()=>{setActiveTab('machines');setStatusFilter('critical')}} style={{ fontSize:'11px',color:'#fca5a5',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:'6px',padding:'4px 10px',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px' }}>See all<ChevronRight style={{ width:'12px',height:'12px' }} /></button>}
                 </div>
                 {alertCount===0
-                  ? <div style={{ display:'flex',alignItems:'center',gap:'10px',padding:'16px',background:'rgba(34,197,94,0.08)',borderRadius:'8px',border:'1px solid rgba(34,197,94,0.2)' }}><span style={{ fontSize:'18px' }}>✓</span><span style={{ fontSize:'13px',color:'#86efac' }}>All machines operating normally.</span></div>
+                  ? <div style={{ display:'flex',alignItems:'center',gap:'10px',padding:'16px',background:'rgba(34,197,94,0.08)',borderRadius:'8px',border:'1px solid rgba(34,197,94,0.2)' }}><CheckCircle style={{ width:'18px',height:'18px',color:'#86efac' }} /><span style={{ fontSize:'13px',color:'#86efac' }}>All machines operating normally.</span></div>
                   : <div style={{ display:'flex',flexDirection:'column',gap:'7px' }}>
                     {(data?.alerts??[]).slice(0,6).map((alert:string,idx:number)=>{
                       const mId=alert.match(/^([A-Z0-9-]+)/)?.[1]??null
                       const util=machines.find(x=>x.id===mId)?.utilization??0
                       return <div key={idx} style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'9px 12px',borderRadius:'8px',background:getStatusBg(util),border:`1px solid ${getStatusBorder(util)}`,cursor:'pointer' }} onClick={()=>{setSelectedMachineId(mId);setActiveTab('machines')}}>
                         <div style={{ display:'flex',alignItems:'center',gap:'8px' }}><AlertCircle style={{ width:'13px',height:'13px',color:getStatusColor(util),flexShrink:0 }} />{mId&&<span style={{ fontSize:'11px',fontWeight:'700',color:getStatusColor(util) }}>{mId}</span>}<span style={{ fontSize:'12px',color:'rgba(255,255,255,0.65)' }}>{alert.replace(mId??'','').trim()}</span></div>
-                        <span style={{ fontSize:'10px',color:'#60a5fa',whiteSpace:'nowrap' }}>View →</span>
+                        <span style={{ fontSize:'10px',color:'#60a5fa',whiteSpace:'nowrap' }}>View</span>
                       </div>
                     })}
                   </div>
@@ -288,13 +291,13 @@ const DashboardPage: React.FC = () => {
         {activeTab === 'machines' && (
           <div>
             <div style={{ display:'flex',gap:'6px',marginBottom:'16px',flexWrap:'wrap',alignItems:'center' }}>
-              {([['grid','⊞  Machine Grid'],['distribution','📊  Distributions'],['scatter','·  Activity vs Revenue'],['trends','📈  Trends']] as [MachinesSubTab,string][]).map(([key,label])=>(
+              {([['grid','Machine Grid'],['distribution','Distributions'],['scatter','Activity vs Revenue'],['trends','Trends']] as [MachinesSubTab,string][]).map(([key,label])=>(
                 <button key={key} onClick={()=>setMachinesSubTab(key)} style={subTabBtn(machinesSubTab===key)}>{label}</button>
               ))}
               <div style={{ marginLeft:'auto',display:'flex',gap:'6px' }}>
                 {(['all','healthy','warning','critical'] as const).map(s=>(
                   <button key={s} onClick={()=>setStatusFilter(s)} style={pillBtn(statusFilter===s,s==='critical'?'#ef4444':s==='warning'?'#eab308':s==='healthy'?'#22c55e':'#60a5fa')}>
-                    {s==='all'?`All (${machines.length})`:s==='healthy'?`✓ ${healthStatus.healthy}`:s==='warning'?`⚠ ${healthStatus.warning}`:`✕ ${healthStatus.critical}`}
+                    {s==='all'?`All (${machines.length})`:s==='healthy'?`Healthy ${healthStatus.healthy}`:s==='warning'?`Warning ${healthStatus.warning}`:`Critical ${healthStatus.critical}`}
                   </button>
                 ))}
               </div>
@@ -304,7 +307,7 @@ const DashboardPage: React.FC = () => {
                 <Package style={{ width:'15px',height:'15px',color:'#ef4444',flexShrink:0 }} />
                 <span style={{ fontSize:'13px',color:'#fca5a5',fontWeight:'600' }}>Restock priority:</span>
                 {restockList.filter(m=>m.utilization<40).slice(0,8).map(m=>(
-                  <span key={m.id} onClick={()=>setSelectedMachineId(m.id)} style={{ fontSize:'11px',padding:'3px 10px',borderRadius:'5px',background:'rgba(239,68,68,0.2)',color:'#fca5a5',fontWeight:'700',cursor:'pointer',border:'1px solid rgba(239,68,68,0.3)' }}>{m.id}{m.hasAlert?' ⚠':''}</span>
+                  <span key={m.id} onClick={()=>setSelectedMachineId(m.id)} style={{ fontSize:'11px',padding:'3px 10px',borderRadius:'5px',background:'rgba(239,68,68,0.2)',color:'#fca5a5',fontWeight:'700',cursor:'pointer',border:'1px solid rgba(239,68,68,0.3)' }}>{m.id}{m.hasAlert?' Alert':''}</span>
                 ))}
               </div>
             )}
@@ -329,7 +332,7 @@ const DashboardPage: React.FC = () => {
                       <div style={{ ...cardStyle,padding:'20px' }}>
                         <p style={sh}>Box plots — spread of activity within each status group</p>
                         <BoxPlotChart groups={boxGroups} width={900} domain={[0,100]} />
-                        <div style={{ marginTop:'8px',fontSize:'11px',color:'rgba(255,255,255,0.3)',textAlign:'center' }}>Box = middle 50% of machines · Line = median · ◆ = average · ○ = outlier machine · Whiskers = full range</div>
+                        <div style={{ marginTop:'8px',fontSize:'11px',color:'rgba(255,255,255,0.3)',textAlign:'center' }}>Box = middle 50% of machines · Line = median · Marker = average · Hollow marker = outlier machine · Whiskers = full range</div>
                       </div>
                     )}
                     {violinGroups.length>0&&(

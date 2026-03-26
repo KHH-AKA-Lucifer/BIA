@@ -103,7 +103,7 @@ const LoginPage: React.FC = () => {
             margin: '0 0 0.75rem',
             letterSpacing: '-0.5px'
           }}>
-            Vending Machine Analytic Dashboard
+            VendoSight
           </h1>
           <p style={{
             fontSize: '14px',
@@ -362,7 +362,7 @@ const LoginPage: React.FC = () => {
           fontWeight: 500,
           margin: '1.5rem 0 0'
         }}>
-          © 2026 Vending Machine Analytic Dashboard
+          © 2026 VendoSight
         </p>
       </div>
 

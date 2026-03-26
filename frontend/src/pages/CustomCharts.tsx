@@ -679,7 +679,7 @@ export const MachineGrid: React.FC<MachineGridProps> = ({
                 <div style={{ width: `${m.utilization}%`, height: '100%', background: col, borderRadius: '2px', transition: 'width 0.4s' }} />
               </div>
               <div style={{ fontSize: '9px', color: col, marginTop: '5px', fontWeight: '600' }}>
-                {m.utilization >= 70 ? '● Healthy' : m.utilization >= 40 ? '◐ Warning' : '○ Critical'}
+                {m.utilization >= 70 ? 'Healthy' : m.utilization >= 40 ? 'Warning' : 'Critical'}
               </div>
             </div>
           )
@@ -691,11 +691,11 @@ export const MachineGrid: React.FC<MachineGridProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
           <button onClick={() => setPage(0)} disabled={page === 0}
             style={{ padding: '4px 10px', borderRadius: '5px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'rgba(255,255,255,0.5)', cursor: page === 0 ? 'not-allowed' : 'pointer', fontSize: '12px', opacity: page === 0 ? 0.4 : 1 }}>
-            «
+            First
           </button>
           <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
             style={{ padding: '4px 10px', borderRadius: '5px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'rgba(255,255,255,0.5)', cursor: page === 0 ? 'not-allowed' : 'pointer', fontSize: '12px', opacity: page === 0 ? 0.4 : 1 }}>
-            ‹ Prev
+            Prev
           </button>
           {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
             const p = totalPages <= 7 ? i : page < 4 ? i : page > totalPages - 4 ? totalPages - 7 + i : page - 3 + i
@@ -713,11 +713,11 @@ export const MachineGrid: React.FC<MachineGridProps> = ({
           })}
           <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
             style={{ padding: '4px 10px', borderRadius: '5px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'rgba(255,255,255,0.5)', cursor: page === totalPages - 1 ? 'not-allowed' : 'pointer', fontSize: '12px', opacity: page === totalPages - 1 ? 0.4 : 1 }}>
-            Next ›
+            Next
           </button>
           <button onClick={() => setPage(totalPages - 1)} disabled={page === totalPages - 1}
             style={{ padding: '4px 10px', borderRadius: '5px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'rgba(255,255,255,0.5)', cursor: page === totalPages - 1 ? 'not-allowed' : 'pointer', fontSize: '12px', opacity: page === totalPages - 1 ? 0.4 : 1 }}>
-            »
+            Last
           </button>
         </div>
       )}
