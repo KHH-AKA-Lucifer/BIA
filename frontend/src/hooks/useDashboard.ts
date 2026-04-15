@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { DashboardSummary } from '../types/dashboard.types'
-import dashboardService, { DashboardPeriod } from '../services/dashboard.service'
+import { DashboardPeriod, DashboardSummary } from '../types/dashboard.types'
+import dashboardService from '../services/dashboard.service'
 
 interface UseDashboardReturn {
   data: DashboardSummary | null

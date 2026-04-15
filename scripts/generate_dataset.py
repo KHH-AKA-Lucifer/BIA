@@ -1,68 +1,127 @@
+from __future__ import annotations
+
 import argparse
-import hashlib
+import sys
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description='Expand vending machine sales dataset')
-    parser.add_argument('--input', type=str, default='backend/app/data/vending_machine_sales.csv', help='Input CSV path')
-    parser.add_argument('--output', type=str, default='backend/app/data/expanded_vending_sales.csv', help='Output expanded CSV path')
-    parser.add_argument('--machines', type=int, default=80, help='Target number of machines (50-100)')
-    parser.add_argument('--months', type=int, default=8, help='Target duration in months (6-12)')
-    parser.add_argument('--rows', type=int, default=120000, help='Target number of output rows (100k+)')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
+BACKEND_ROOT = Path(__file__).resolve().parents[1] / "backend"
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+from app.services.taxonomy import enrich_product_taxonomy
+
+
+DEFAULT_INPUT = "backend/app/data/vending_machine_sales.csv"
+DEFAULT_OUTPUT = "backend/app/data/expanded_vending_sales.csv"
+DEFAULT_END_DATE = "2026-04-15"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Generate a richer synthetic vending dataset with full timestamps."
+    )
+    parser.add_argument("--input", default=DEFAULT_INPUT, help="Seed CSV path")
+    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Generated CSV path")
+    parser.add_argument(
+        "--start-date",
+        default=None,
+        help="Start date in YYYY-MM-DD. Defaults to the minimum date in the seed CSV.",
+    )
+    parser.add_argument(
+        "--end-date",
+        default=DEFAULT_END_DATE,
+        help="End date in YYYY-MM-DD. Defaults to 2026-04-15.",
+    )
+    parser.add_argument(
+        "--rows",
+        type=int,
+        default=240000,
+        help="Target number of synthetic rows to generate.",
+    )
+    parser.add_argument(
+        "--machines",
+        type=int,
+        default=90,
+        help="Target number of machines to simulate.",
+    )
+    parser.add_argument(
+        "--synthetic-products",
+        type=int,
+        default=60,
+        help="Number of extra synthetic products to add to the catalog.",
+    )
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
     return parser.parse_args()
 
 
-def baseline_stats(df):
-    stats = {
-        'rows': len(df),
-        'unique_machines': df['Machine'].nunique(),
-        'unique_locations': df['Location'].nunique(),
-        'categories': df['Category'].nunique(),
-        'types': df['Type'].value_counts().to_dict(),
-        'revenue_mean': df['LineTotal'].mean(),
-        'revenue_std': df['LineTotal'].std(),
-        'date_min': df['TransDate'].min(),
-        'date_max': df['TransDate'].max(),
+@dataclass(frozen=True)
+class MachineProfile:
+    device_id: str
+    location: str
+    machine: str
+    weight: float
+    trend: float
+    weekday_bias: float
+    weekend_bias: float
+    anomaly_bias: float
+    preferred_categories: tuple[str, ...]
+
+
+def load_seed_dataframe(path: Path) -> pd.DataFrame:
+    df = pd.read_csv(path)
+    for column in ["LineTotal", "TransTotal", "RPrice", "MPrice", "RQty", "MQty", "RCoil", "MCoil"]:
+        if column in df.columns:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
+    df["TransDate"] = pd.to_datetime(df["TransDate"], errors="coerce")
+    df["Prcd Date"] = pd.to_datetime(df["Prcd Date"], errors="coerce")
+    df = df.dropna(subset=["TransDate"]).copy()
+    return enrich_product_taxonomy(df)
+
+
+def baseline_stats(df: pd.DataFrame) -> dict[str, object]:
+    trans = pd.to_datetime(df["TransDate"], errors="coerce")
+    return {
+        "rows": len(df),
+        "unique_machines": df["Machine"].nunique(),
+        "unique_locations": df["Location"].nunique(),
+        "unique_products": df["Product"].nunique(),
+        "categories": df["Category"].nunique(),
+        "date_min": trans.min(),
+        "date_max": trans.max(),
+        "hourly_granularity": int(trans.dt.hour.nunique()) if not trans.empty else 0,
     }
-    return stats
 
 
-def realistic_new_locations(existing_locations, n_new, rng):
-    # a set of actual-ish real world place names to draw from
+def realistic_new_locations(existing_locations: list[str], n_new: int, rng: np.random.Generator) -> list[str]:
     place_samples = [
-        'Brunswick Mall', 'Woodland Plaza', 'Lakeside Square', 'Ridgewood Center', 'Hillcrest Market',
-        'Harbor Point', 'Cedar Grove Mall', 'Maple Valley Plaza', 'Pine Ridge Center', 'Oak Park Mall',
-        'Sunset Strip Plaza', 'Canyon Ridge Market', 'Sierra View Center', 'Prairie Town Mall', 'Riverwalk Plaza',
-        'Meadowbrook Mall', 'Highland Center', 'Bayview Market', 'Granite Falls Plaza', 'Clearwater Mall',
-        'Midtown Station', 'Tidewater Plaza', 'Kingsway Center', 'Willow Creek Mall', 'Elmwood Plaza',
-        'Harborview Market', 'Forest Hill Center', 'Stonebridge Mall', 'Legacy Park', 'Royal Oaks Plaza',
-        'Fairway Center', 'Silver Springs Mall', 'Golden Gate Plaza', 'Sunrise Market', 'Broadway Square',
-        'Eastwood Marketplace', 'Westgate Center', 'Northpoint Mall', 'Southpointe Plaza', 'Parkside Mall',
-        'Union Station', 'Crestview Center', 'Pioneer Plaza', 'Grove Street Marketplace', 'Apollo Mall',
-        'Beacon Hill Plaza', 'Valley View Center', 'Northridge Mall', 'CityCentre', 'Commerce Square',
-        'District Station', 'Market Street Plaza', 'Grand Avenue Mall', 'Evergreen Center', 'Lakeshore Plaza',
-        'Plainsview Market', 'Old Town Mall', 'Riverside Plaza', 'Skyline Center', 'Tech Corridor Mall',
-        'Westfield Market', 'Timesquare Plaza', 'Galleria Mall'
+        "Brunswick Mall", "Woodland Plaza", "Lakeside Square", "Ridgewood Center", "Hillcrest Market",
+        "Harbor Point", "Cedar Grove Mall", "Maple Valley Plaza", "Pine Ridge Center", "Oak Park Mall",
+        "Sunset Strip Plaza", "Canyon Ridge Market", "Sierra View Center", "Prairie Town Mall", "Riverwalk Plaza",
+        "Meadowbrook Mall", "Highland Center", "Bayview Market", "Granite Falls Plaza", "Clearwater Mall",
+        "Midtown Station", "Tidewater Plaza", "Kingsway Center", "Willow Creek Mall", "Elmwood Plaza",
+        "Harborview Market", "Forest Hill Center", "Stonebridge Mall", "Legacy Park", "Royal Oaks Plaza",
+        "Fairway Center", "Silver Springs Mall", "Golden Gate Plaza", "Sunrise Market", "Broadway Square",
+        "Eastwood Marketplace", "Westgate Center", "Northpoint Mall", "Southpointe Plaza", "Parkside Mall",
+        "Union Station", "Crestview Center", "Pioneer Plaza", "Grove Street Marketplace", "Apollo Mall",
+        "Beacon Hill Plaza", "Valley View Center", "Northridge Mall", "CityCentre", "Commerce Square",
+        "District Station", "Market Street Plaza", "Grand Avenue Mall", "Evergreen Center", "Lakeshore Plaza",
+        "Plainsview Market", "Old Town Mall", "Riverside Plaza", "Skyline Center", "Tech Corridor Mall",
+        "Westfield Market", "Timesquare Plaza", "Galleria Mall",
     ]
-    existing_lower = {loc.lower() for loc in existing_locations}
-    candidates = [loc for loc in place_samples if loc.lower() not in existing_lower]
-
+    existing_lower = {location.lower() for location in existing_locations}
+    candidates = [location for location in place_samples if location.lower() not in existing_lower]
     rng.shuffle(candidates)
-    added = []
+    added = candidates[:n_new]
 
-    for c in candidates:
-        if len(added) >= n_new:
-            break
-        added.append(c)
-
-    # as fallback in case insufficient unique candidates, generate some compound names from existing
     while len(added) < n_new:
         base = rng.choice(existing_locations)
-        suffix = rng.choice(['Plaza', 'Market', 'Center', 'Mall', 'Station', 'Square'])
+        suffix = rng.choice(["Plaza", "Market", "Center", "Mall", "Station", "Square"])
         candidate = f"{base} {suffix}"
         if candidate not in existing_locations and candidate not in added:
             added.append(candidate)
@@ -70,306 +129,348 @@ def realistic_new_locations(existing_locations, n_new, rng):
     return added
 
 
-def make_machine_profile(df, target_machines, rng):
-    unique_machines = df[['Device ID', 'Location', 'Machine']].drop_duplicates().reset_index(drop=True)
-    machine_profiles = []
+def make_machine_profiles(seed_df: pd.DataFrame, target_machines: int, rng: np.random.Generator) -> list[MachineProfile]:
+    unique = seed_df[["Device ID", "Location", "Machine", "Category"]].drop_duplicates()
+    by_machine = unique.groupby(["Device ID", "Location", "Machine"])["Category"].agg(lambda s: tuple(pd.Series(s).dropna().unique()))
+    profiles: list[MachineProfile] = []
 
-    # preserve original machines first
-    for _, row in unique_machines.iterrows():
-        machine_profiles.append({
-            'Device ID': row['Device ID'],
-            'Location': row['Location'],
-            'Machine': row['Machine'],
-            'weight': 1.0,
-        })
+    for (device_id, location, machine), categories in by_machine.items():
+        profiles.append(
+            MachineProfile(
+                device_id=device_id,
+                location=location,
+                machine=machine,
+                weight=float(rng.uniform(0.9, 1.2)),
+                trend=float(rng.uniform(-0.18, 0.2)),
+                weekday_bias=float(rng.uniform(0.95, 1.08)),
+                weekend_bias=float(rng.uniform(0.8, 1.25)),
+                anomaly_bias=float(rng.uniform(0.01, 0.05)),
+                preferred_categories=tuple(categories) if categories else ("Food",),
+            )
+        )
 
-    location_names = unique_machines['Location'].unique().tolist()
+    location_names = sorted(seed_df["Location"].dropna().astype(str).unique().tolist())
+    extra_locations = realistic_new_locations(location_names, max(0, target_machines - len(profiles)), rng)
+    location_names.extend(extra_locations)
 
-    # add realistic new locations derived from a curated list and existing ones if needed
-    if len(location_names) < 20:
-        new_loc_candidates = realistic_new_locations(location_names, 50, rng)
-        location_names.extend(new_loc_candidates)
+    categories = tuple(seed_df["Category"].dropna().astype(str).unique().tolist())
 
-    # ensure we have at least 20 locations
-    if len(location_names) < 20:
-        extra = realistic_new_locations(location_names, 20 - len(location_names), rng)
-        location_names.extend(extra)
+    while len(profiles) < target_machines:
+        base_profile = profiles[int(rng.integers(len(profiles)))]
+        location = location_names[len(profiles) % len(location_names)]
+        device_id = f"VJ{900000000 + len(profiles):09d}"
+        machine = f"{location} x{10000 + len(profiles)}"
+        preferred = tuple(rng.choice(categories, size=min(2, len(categories)), replace=False).tolist()) or base_profile.preferred_categories
+        profiles.append(
+            MachineProfile(
+                device_id=device_id,
+                location=location,
+                machine=machine,
+                weight=float(rng.uniform(0.75, 1.1)),
+                trend=float(rng.uniform(-0.22, 0.24)),
+                weekday_bias=float(rng.uniform(0.92, 1.1)),
+                weekend_bias=float(rng.uniform(0.82, 1.35)),
+                anomaly_bias=float(rng.uniform(0.02, 0.07)),
+                preferred_categories=preferred,
+            )
+        )
 
-    # generate extra locations and machines
-    existing_machines = unique_machines['Machine'].tolist()
-    while len(machine_profiles) < target_machines:
-        # use existing location with probability, or new location
-        if len(location_names) < 20 or rng.random() < 0.4:
-            base_loc = rng.choice(location_names)
-            new_loc = f"{base_loc} Synth {len(location_names) + 1}"
-            if new_loc not in location_names:
-                location_names.append(new_loc)
-            loc = new_loc
-        else:
-            loc = rng.choice(location_names)
+    weights = np.array([profile.weight for profile in profiles], dtype=float)
+    weights /= weights.sum()
 
-        base = unique_machines.sample(n=1, random_state=rng.integers(1_000_000)).iloc[0]
-        new_machine = f"{loc} x{int(10000 + len(machine_profiles))}"
-        new_device = f"VJ{int(900000000 + len(machine_profiles))}"
-
-        machine_profiles.append({
-            'Device ID': new_device,
-            'Location': loc,
-            'Machine': new_machine,
-            'weight': 0.85,  # slightly lower than originals to preserve distribution
-        })
-
-    # Normalize weights
-    weights = np.array([m['weight'] for m in machine_profiles], dtype=float)
-    weights = weights / weights.sum()
-    for i, m in enumerate(machine_profiles):
-        machine_profiles[i]['weight'] = weights[i]
-
-    return machine_profiles
-
-
-def generate_date_range(start, months):
-    end_date = start + timedelta(days=int(months * 30))
-    return pd.date_range(start=start, end=end_date, freq='D')
-
-
-def seasonal_factor(date):
-    weekday = date.weekday()  # Monday=0
-    weekday_factors = [0.9, 1.0, 1.05, 1.10, 1.1, 1.25, 0.85]
-    month = date.month
-    month_factors = [0.95, 0.95, 1.00, 1.05, 1.08, 1.12, 1.15, 1.10, 1.08, 1.03, 0.98, 0.96]
-    return weekday_factors[weekday] * month_factors[month - 1]
+    normalized: list[MachineProfile] = []
+    for profile, weight in zip(profiles, weights, strict=True):
+        normalized.append(
+            MachineProfile(
+                device_id=profile.device_id,
+                location=profile.location,
+                machine=profile.machine,
+                weight=float(weight),
+                trend=profile.trend,
+                weekday_bias=profile.weekday_bias,
+                weekend_bias=profile.weekend_bias,
+                anomaly_bias=profile.anomaly_bias,
+                preferred_categories=profile.preferred_categories,
+            )
+        )
+    return normalized
 
 
-def generate_synthetic_products(df, n_new, rng):
-    categories = df['Category'].value_counts(normalize=True)
-    price_stats = df.groupby('Category').agg({
-        'RPrice': 'mean',
-        'MPrice': 'mean',
-        'RCoil': 'mean',
-        'MCoil': 'mean',
-        'RQty': 'mean',
-        'MQty': 'mean',
-    }).to_dict(orient='index')
+def build_product_catalog(seed_df: pd.DataFrame, synthetic_products: int, rng: np.random.Generator) -> pd.DataFrame:
+    catalog = (
+        seed_df[["Product", "Category", "Subcategory", "Brand", "RPrice", "MPrice", "RCoil", "MCoil", "RQty", "MQty"]]
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+    catalog["Synthetic"] = False
 
-    # Realistic product name templates to use (brand + flavour)
-    placehold_products = [
-        'Coca-Cola Zero Sugar', 'Pepsi Max', 'Monster Ultra', 'Red Bull Sugar-Free',
-        'Arizona Green Tea', 'Naked Juice Berry', 'Kind Bar Dark Chocolate',
-        'Lays Classic', 'Doritos Cool Ranch', 'Pringles Original', 'Nutri-Grain Bar',
-        'Gatorade Lemon-Lime', 'Powerade Mountain Berry', 'SmartWater', 'Evian 500ml',
-        'Oreo Mini', 'KitKat Chocolate', 'M&M Plain', 'Snickers Mini',
-        'Quaker Oats Chewy', 'Nature Valley Oats', 'Cheetos Flamin Hot',
-        'Pepsi Wild Cherry', 'Dr Pepper Cherry', 'Sprite Cranberry',
-        'Mountain Dew Voltage', 'Fanta Orange', 'Minute Maid Lemonade'
+    category_weights = seed_df["Category"].value_counts(normalize=True)
+    stats = seed_df.groupby("Category").agg({"RPrice": "mean", "RQty": "mean", "RCoil": "mean", "MCoil": "mean"}).to_dict("index")
+    flavors = ["Cherry", "Mango", "Lime", "Peach", "Berry", "Vanilla", "Sea Salt", "BBQ", "Honey", "Mocha"]
+    product_bases = [
+        "Sparkling Water", "Cold Brew", "Trail Mix", "Granola Bar", "Protein Bar",
+        "Iced Tea", "Fruit Chips", "Energy Drink", "Pretzel Bites", "Greek Yogurt Bites",
+        "Citrus Soda", "Matcha Latte", "Ginger Ale", "Chocolate Wafer", "Salted Nuts",
     ]
 
-    # Add more generated names with different brand patterns.
-    extra_bases = ['Snapple', 'Bai', 'V8', 'Sunkist', 'Voss', 'Naked', 'Clif', 'RXBAR', 'AXIO', 'Pureleaf']
-    flavors = ['Lemon', 'Grape', 'Cherry', 'Mango', 'Watermelon', 'Peach', 'Lime', 'Berry', 'Tropical', 'Citrus']
-    for b in extra_bases:
-        for f in flavors[:4]:
-            placehold_products.append(f"{b} {f}")
-
-    existing_products = set(df['Product'].astype(str).unique())
-    real_candidates = [p for p in placehold_products if p not in existing_products]
-
-    synthetic = []
-    idx = 0
-    while len(synthetic) < n_new:
-        cat = rng.choice(categories.index, p=categories.values)
-        base = price_stats.get(cat, None)
-        if base is None:
-            base = {'RPrice': 2.0, 'MPrice': 2.0, 'RCoil': 130.0, 'MCoil': 130.0, 'RQty': 1.0, 'MQty': 1.0}
-
-        if idx < len(real_candidates):
-            prod_name = real_candidates[idx]
-        else:
-            # fallback more random from existing with a marker not obvious
-            prod_name = f"{rng.choice(list(existing_products))} Plus"
-
-        price = float(max(0.8, rng.normal(base['RPrice'], base['RPrice'] * 0.1)))
-        qty = int(max(1, round(rng.normal(base['RQty'], max(0.2, base['RQty'] * 0.1)))))
-        rcoil = int(max(50, round(rng.normal(base['RCoil'], max(5, base['RCoil'] * 0.05)))))
-        mcoil = int(max(50, round(rng.normal(base['MCoil'], max(5, base['MCoil'] * 0.05)))))
-
-        synthetic.append({
-            'Product': prod_name,
-            'Category': cat,
-            'RPrice': round(price, 2),
-            'MPrice': round(price, 2),
-            'RCoil': rcoil,
-            'MCoil': mcoil,
-            'RQty': qty,
-            'MQty': qty,
-            'Synthetic': False,
-        })
-
-        idx += 1
-
-    return pd.DataFrame(synthetic)
-
-
-def pick_product_row(catalog, synthetic_prob, rng):
-    if 'Synthetic' in catalog.columns:
-        actuals = catalog[catalog['Synthetic'] == False]
-        synth = catalog[catalog['Synthetic'] == True]
-
-        if len(synth) > 0 and rng.random() < synthetic_prob:
-            return synth.sample(n=1, random_state=rng.integers(1_000_000)).iloc[0]
-
-        if len(actuals) > 0:
-            return actuals.sample(n=1, random_state=rng.integers(1_000_000)).iloc[0]
-
-    return catalog.sample(n=1, random_state=rng.integers(1_000_000)).iloc[0]
-
-
-def compute_transaction_id(existing_txns, index):
-    # deterministic but unique with index
-    base = int(1e10) + index
-    return base
-
-
-def run():
-    args = parse_args()
-    np.random.seed(args.seed)
-    rng = np.random.default_rng(args.seed)
-
-    df = pd.read_csv(args.input)
-
-    # ensure types for numeric and date
-    for col in ['LineTotal', 'TransTotal', 'RPrice', 'MPrice', 'RQty', 'MQty', 'RCoil', 'MCoil']:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-
-    df['TransDate'] = pd.to_datetime(df['TransDate'], errors='coerce', infer_datetime_format=True)
-    df['Prcd Date'] = pd.to_datetime(df['Prcd Date'], errors='coerce', infer_datetime_format=True)
-
-    # basic quality assurance
-    original_stats = baseline_stats(df)
-    print('Original data stats:', original_stats)
-
-    machine_profiles = make_machine_profile(df, args.machines, rng)
-
-    date_start = df['TransDate'].min()
-    date_range = generate_date_range(date_start, args.months)
-
-    target_rows = max(args.rows, 100000)
-    target_days = max(1, len(date_range))
-    base_per_day = target_rows / target_days
-
-    rows = []
-    txn_index = 0
-
-    machine_weights = np.array([m['weight'] for m in machine_profiles], dtype=float)
-
-    # optional location-based variation distribution
-    location_mapping = {m['Machine']: m['Location'] for m in machine_profiles}
-
-    # Pre-derive product catalog from original data and add synthetic products
-    products = df[['Product', 'Category', 'RPrice', 'MPrice', 'RCoil', 'MCoil', 'RQty', 'MQty']].drop_duplicates().reset_index(drop=True)
-    products['Synthetic'] = False
-
-    extra = generate_synthetic_products(df, 50, rng)  # add 40-50 synthetic products, default 50
-    product_catalog = pd.concat([products, extra], ignore_index=True)
-
-    # Column order preservation
-    columns = df.columns.tolist()
-
-    for date in date_range:
-        day_factor = seasonal_factor(date)
-        num_for_day = max(1, int(round(base_per_day * day_factor)))
-
-        # small random jitter
-        jitter = rng.integers(-5, 6)
-        num_for_day = max(1, num_for_day + jitter)
-
-        for _ in range(num_for_day):
-            src = pick_product_row(product_catalog, synthetic_prob=0.35, rng=rng)
-            machine_choice = rng.choice(len(machine_profiles), p=machine_weights)
-            machine_profile = machine_profiles[machine_choice]
-
-            product_row = src
-
-            # choose payment type by original proportions
-            type_choice = rng.choice(df['Type'].unique(), p=df['Type'].value_counts(normalize=True).loc[df['Type'].unique()].values)
-
-            # produce line-level quantity and price fluctuations while preserving non-negative
-            qty = int(max(1, round(product_row.get('RQty', 1) * (1 + rng.normal(0, 0.08)))))
-            price = round(max(0.75, product_row.get('RPrice', 1.0) * (1 + rng.normal(0, 0.05))), 2)
-
-            # inject realistic noise / outliers (about 3% of transactions)
-            if rng.random() < 0.03:
-                if rng.random() < 0.55:
-                    price = round(price * (1 + rng.uniform(1.5, 3.5)), 2)  # spike price
-                else:
-                    qty = int(max(1, round(qty * rng.uniform(2.5, 8.0))))  # large quantity spike
-
-            # manual state to avoid outlier from being too extreme
-            price = min(price, max(0.75, product_row.get('RPrice', 1.0) * 10))
-            qty = min(qty, int(max(1, product_row.get('RQty', 1) * 12)))
-
-            line_total = round(qty * price, 2)
-
-            # build record with same columns as input file
-            rec = {
-                'Status': 'Processed',
-                'Device ID': machine_profile['Device ID'],
-                'Location': machine_profile['Location'],
-                'Machine': machine_profile['Machine'],
-                'Product': product_row['Product'],
-                'Category': product_row['Category'],
-                'Transaction': compute_transaction_id(txn_index, txn_index),
-                'TransDate': date.strftime('%-m/%-d/%Y'),
-                'Type': type_choice,
-                'RCoil': int(max(1, round(product_row.get('RCoil', 1) * (1 + rng.normal(0, 0.05))))),
-                'RPrice': price,
-                'RQty': qty,
-                'MCoil': int(max(1, round(product_row.get('MCoil', 1) * (1 + rng.normal(0, 0.05))))),
-                'MPrice': price,
-                'MQty': qty,
-                'LineTotal': line_total,
-                'TransTotal': line_total,
-                'Prcd Date': date.strftime('%-m/%-d/%Y'),
+    synthetic_rows: list[dict[str, object]] = []
+    for index in range(synthetic_products):
+        category = rng.choice(category_weights.index, p=category_weights.values)
+        base = stats.get(category, {"RPrice": 2.0, "RQty": 1.0, "RCoil": 120.0, "MCoil": 120.0})
+        product_name = f"{rng.choice(product_bases)} - {rng.choice(flavors)} {index + 1}"
+        price = round(max(0.8, rng.normal(base["RPrice"], max(base["RPrice"] * 0.12, 0.15))), 2)
+        qty = int(max(1, round(rng.normal(base["RQty"], 0.35))))
+        rcoil = int(max(60, round(rng.normal(base["RCoil"], 10))))
+        mcoil = int(max(60, round(rng.normal(base["MCoil"], 10))))
+        synthetic_rows.append(
+            {
+                "Product": product_name,
+                "Category": category,
+                "Subcategory": category,
+                "Brand": product_name.split(" - ")[0],
+                "RPrice": price,
+                "MPrice": price,
+                "RCoil": rcoil,
+                "MCoil": mcoil,
+                "RQty": qty,
+                "MQty": qty,
+                "Synthetic": True,
             }
+        )
 
-            # preserve columns that may exist
-            row = {c: rec.get(c, src.get(c, np.nan)) for c in columns}
+    return enrich_product_taxonomy(pd.concat([catalog, pd.DataFrame(synthetic_rows)], ignore_index=True))
 
-            rows.append(row)
-            txn_index += 1
 
-            if txn_index >= target_rows:
+def catalog_lookup(catalog: pd.DataFrame) -> tuple[list[dict[str, object]], dict[str, list[dict[str, object]]]]:
+    records = catalog.to_dict("records")
+    by_category: dict[str, list[dict[str, object]]] = {}
+    for record in records:
+        by_category.setdefault(str(record["Category"]), []).append(record)
+    return records, by_category
+
+
+def month_factor(month: int) -> float:
+    return {
+        1: 0.92,
+        2: 0.95,
+        3: 1.02,
+        4: 1.06,
+        5: 1.12,
+        6: 1.08,
+        7: 1.15,
+        8: 1.1,
+        9: 1.04,
+        10: 1.0,
+        11: 1.06,
+        12: 1.14,
+    }[month]
+
+
+def weekday_factor(weekday: int) -> float:
+    return [0.9, 0.98, 1.02, 1.06, 1.12, 1.22, 0.88][weekday]
+
+
+def hourly_weights() -> dict[int, float]:
+    return {
+        6: 0.25,
+        7: 0.55,
+        8: 0.95,
+        9: 0.9,
+        10: 0.8,
+        11: 0.88,
+        12: 1.18,
+        13: 1.05,
+        14: 0.82,
+        15: 0.78,
+        16: 0.92,
+        17: 1.08,
+        18: 1.15,
+        19: 0.86,
+        20: 0.62,
+        21: 0.42,
+    }
+
+
+def pick_hour(location: str, rng: np.random.Generator) -> int:
+    weights = hourly_weights()
+    base_hours = np.array(list(weights.keys()))
+    hour_weights = np.array(list(weights.values()), dtype=float)
+
+    if "Station" in location or "Centre" in location or "Center" in location:
+        hour_weights[base_hours >= 17] *= 1.15
+    if "Mall" in location or "Plaza" in location:
+        hour_weights[(base_hours >= 11) & (base_hours <= 18)] *= 1.18
+    if "Market" in location:
+        hour_weights[(base_hours >= 8) & (base_hours <= 12)] *= 1.1
+
+    hour_weights /= hour_weights.sum()
+    return int(rng.choice(base_hours, p=hour_weights))
+
+
+def transaction_timestamp(day: pd.Timestamp, location: str, rng: np.random.Generator) -> datetime:
+    hour = pick_hour(location, rng)
+    minute = int(rng.integers(0, 60))
+    second = int(rng.integers(0, 60))
+    return datetime(day.year, day.month, day.day, hour, minute, second)
+
+
+def profile_demand_multiplier(profile: MachineProfile, current_day: pd.Timestamp, progress: float) -> float:
+    weekend = current_day.weekday() >= 5
+    weekend_factor = profile.weekend_bias if weekend else profile.weekday_bias
+    long_term = 1 + (profile.trend * progress)
+    return max(0.35, weekend_factor * long_term)
+
+
+def sample_product(
+    profile: MachineProfile,
+    catalog_records: list[dict[str, object]],
+    category_records: dict[str, list[dict[str, object]]],
+    rng: np.random.Generator,
+) -> dict[str, object]:
+    preferred_pools = [category_records[category] for category in profile.preferred_categories if category in category_records]
+    if preferred_pools and rng.random() < 0.68:
+        pool = preferred_pools[int(rng.integers(len(preferred_pools)))]
+        return pool[int(rng.integers(len(pool)))]
+    return catalog_records[int(rng.integers(len(catalog_records)))]
+
+
+def build_record(
+    profile: MachineProfile,
+    product_row: dict[str, object],
+    timestamp: datetime,
+    transaction_id: int,
+    anomaly_multiplier: float,
+    rng: np.random.Generator,
+) -> dict[str, object]:
+    qty = int(max(1, round(product_row.get("RQty", 1) * (1 + rng.normal(0, 0.12)))))
+    price = max(0.8, float(product_row.get("RPrice", 1.5)) * (1 + rng.normal(0, 0.06)))
+
+    if anomaly_multiplier != 1.0:
+        if anomaly_multiplier > 1:
+            qty = int(max(1, round(qty * min(anomaly_multiplier, 6.0))))
+        else:
+            price *= max(anomaly_multiplier, 0.7)
+
+    line_total = round(qty * price, 2)
+    type_choice = rng.choice(["Cash", "Credit"], p=[0.28, 0.72])
+
+    return {
+        "Status": "Processed",
+        "Device ID": profile.device_id,
+        "Location": profile.location,
+        "Machine": profile.machine,
+        "Product": str(product_row["Product"]),
+        "Category": str(product_row["Category"]),
+        "Subcategory": str(product_row.get("Subcategory", product_row["Category"])),
+        "Brand": str(product_row.get("Brand", str(product_row["Product"]).split(" - ")[0])),
+        "Transaction": transaction_id,
+        "TransDate": timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+        "Type": type_choice,
+        "RCoil": int(max(1, round(float(product_row.get("RCoil", 120)) * (1 + rng.normal(0, 0.04))))),
+        "RPrice": round(price, 2),
+        "RQty": qty,
+        "MCoil": int(max(1, round(float(product_row.get("MCoil", 120)) * (1 + rng.normal(0, 0.04))))),
+        "MPrice": round(price, 2),
+        "MQty": qty,
+        "LineTotal": line_total,
+        "TransTotal": line_total,
+        "Prcd Date": (timestamp + timedelta(minutes=int(rng.integers(1, 45)))).strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
+def generate_transactions(
+    seed_df: pd.DataFrame,
+    profiles: list[MachineProfile],
+    catalog: pd.DataFrame,
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    target_rows: int,
+    rng: np.random.Generator,
+) -> pd.DataFrame:
+    total_days = max(1, (end_date - start_date).days + 1)
+    daily_base = target_rows / total_days
+    machine_weights = np.array([profile.weight for profile in profiles], dtype=float)
+    start = pd.Timestamp(start_date)
+    catalog_records, category_records = catalog_lookup(catalog)
+
+    records: list[dict[str, object]] = []
+    transaction_counter = 10_000_000_000
+
+    for day in pd.date_range(start_date, end_date, freq="D"):
+        progress = ((day - start).days / max(total_days - 1, 1))
+        day_factor = month_factor(day.month) * weekday_factor(day.weekday())
+        daily_target = max(80, int(round(daily_base * day_factor * (1 + 0.22 * progress))))
+        daily_target += int(rng.integers(-8, 9))
+
+        for _ in range(daily_target):
+            profile_index = int(rng.choice(len(profiles), p=machine_weights))
+            profile = profiles[profile_index]
+            multiplier = profile_demand_multiplier(profile, day, progress)
+            if rng.random() > min(0.98, multiplier / 1.35):
+                continue
+
+            product = sample_product(profile, catalog_records, category_records, rng)
+            anomaly_multiplier = 1.0
+            if rng.random() < profile.anomaly_bias:
+                anomaly_multiplier = float(rng.uniform(1.6, 4.4)) if rng.random() < 0.7 else float(rng.uniform(0.75, 0.92))
+
+            timestamp = transaction_timestamp(day, profile.location, rng)
+            records.append(
+                build_record(
+                    profile=profile,
+                    product_row=product,
+                    timestamp=timestamp,
+                    transaction_id=transaction_counter,
+                    anomaly_multiplier=anomaly_multiplier,
+                    rng=rng,
+                )
+            )
+            transaction_counter += 1
+            if len(records) >= target_rows:
                 break
 
-        if txn_index >= target_rows:
+        if len(records) >= target_rows:
             break
 
-    out_df = pd.DataFrame(rows, columns=columns)
-
-    # ensure no nulls for required columns, fill if necessary
-    for c in ['Status', 'Device ID', 'Location', 'Machine', 'Product', 'Category', 'Transaction', 'TransDate', 'Type', 'LineTotal', 'TransTotal', 'Prcd Date']:
-        if c not in out_df.columns:
-            continue
-        if out_df[c].isna().any():
-            if out_df[c].dtype.kind in 'iuf':
-                out_df[c] = out_df[c].fillna(0)
-            else:
-                out_df[c] = out_df[c].fillna('Unknown')
-
-    # ensure unique transaction IDs
-    if out_df['Transaction'].duplicated().any():
-        out_df['Transaction'] = np.arange(int(1e11), int(1e11) + len(out_df), dtype=np.int64)
-
-    out_df.to_csv(args.output, index=False)
-
-    new_stats = baseline_stats(out_df.assign(TransDate=pd.to_datetime(out_df['TransDate'], errors='coerce')))
-    new_stats['output_path'] = args.output
-    print('Expanded data stats:', new_stats)
-
-    if new_stats['rows'] < 100000:
-        print('WARNING: generated row count is < 100,000, consider increasing --rows or --months')
+    output = pd.DataFrame(records, columns=seed_df.columns.tolist())
+    return output
 
 
-if __name__ == '__main__':
+def run() -> None:
+    args = parse_args()
+    rng = np.random.default_rng(args.seed)
+
+    input_path = Path(args.input)
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    seed_df = load_seed_dataframe(input_path)
+    original_stats = baseline_stats(seed_df)
+    print("Seed data stats:", original_stats, flush=True)
+
+    start_date = pd.Timestamp(args.start_date) if args.start_date else pd.Timestamp(seed_df["TransDate"].min().date())
+    end_date = pd.Timestamp(args.end_date)
+    if end_date < start_date:
+        raise ValueError("end-date must be on or after start-date")
+
+    profiles = make_machine_profiles(seed_df, args.machines, rng)
+    catalog = build_product_catalog(seed_df, args.synthetic_products, rng)
+    generated = generate_transactions(
+        seed_df=seed_df,
+        profiles=profiles,
+        catalog=catalog,
+        start_date=start_date,
+        end_date=end_date,
+        target_rows=args.rows,
+        rng=rng,
+    )
+
+    generated.to_csv(output_path, index=False)
+
+    new_stats = baseline_stats(generated)
+    new_stats["output_path"] = str(output_path)
+    print("Generated data stats:", new_stats, flush=True)
+
+
+if __name__ == "__main__":
     run()

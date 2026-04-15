@@ -14,6 +14,14 @@ interface LocationMapProps {
   locations: LocationData[]
 }
 
+const compactCurrency = (value: number) =>
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value)
+
 // Custom marker with revenue color badge
 const createCustomIcon = (revenue: number, maxRevenue: number) => {
   const percentage = (revenue / maxRevenue) * 100
@@ -41,7 +49,7 @@ const createCustomIcon = (revenue: number, maxRevenue: number) => {
           box-shadow: 0 2px 8px rgba(0,0,0,0.3);
           white-space: nowrap;
         ">
-          $${revenue.toFixed(0)}K
+          ${compactCurrency(revenue)}
         </div>
         <div style="
           width: 0;
@@ -110,7 +118,7 @@ export const LocationMap: React.FC<LocationMapProps> = ({ locations }) => {
                 <strong style={{ fontSize: '13px', color: '#111' }}>{location.location}</strong>
               </div>
               <div style={{ color: '#555', marginBottom: '4px' }}>
-                Revenue: <span style={{ fontWeight: '600', color: '#333' }}>${location.revenue.toFixed(0)}K</span>
+                Revenue: <span style={{ fontWeight: '600', color: '#333' }}>{compactCurrency(location.revenue)}</span>
               </div>
               <div style={{ fontSize: '10px', color: '#888' }}>
                 Coordinates: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}

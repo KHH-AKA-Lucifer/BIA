@@ -1,0 +1,46 @@
+{
+  "model_name": "Network Revenue Forecaster",
+  "model_type": "Linear Regression",
+  "task_type": "forecasting",
+  "scope": "network",
+  "target": "next_day_revenue",
+  "features": [
+    "lag_1",
+    "lag_3",
+    "lag_7",
+    "rolling_3",
+    "rolling_7",
+    "rolling_14",
+    "txn_lag_1",
+    "txn_rolling_7",
+    "dow_sin",
+    "dow_cos",
+    "month_sin",
+    "month_cos",
+    "is_weekend"
+  ],
+  "intercept": 49.236542583783425,
+  "coefficients": [
+    0.0004840352576245266,
+    0.07990879003510641,
+    0.17245928993194223,
+    0.23941769359469411,
+    -0.8738410753481873,
+    0.4685576619425883,
+    -0.3990304549595726,
+    2.1303415104701053,
+    1.16367553326673,
+    -22.259270125130797,
+    -1.793817363352726,
+    -2.1902114322018,
+    12.155032307720841
+  ],
+  "metrics": {
+    "mae": 24.86,
+    "rmse": 31.13,
+    "train_samples": 1241,
+    "test_samples": 311
+  },
+  "trained_at": "2026-04-15T15:02:45.924522+00:00",
+  "saved_at": "2026-04-15T15:02:45.924619+00:00"
+}

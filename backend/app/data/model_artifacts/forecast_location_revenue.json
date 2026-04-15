@@ -1,0 +1,46 @@
+{
+  "model_name": "Location Revenue Forecaster",
+  "model_type": "Linear Regression",
+  "task_type": "forecasting",
+  "scope": "location",
+  "target": "next_day_revenue",
+  "features": [
+    "lag_1",
+    "lag_3",
+    "lag_7",
+    "rolling_3",
+    "rolling_7",
+    "rolling_14",
+    "txn_lag_1",
+    "txn_rolling_7",
+    "dow_sin",
+    "dow_cos",
+    "month_sin",
+    "month_cos",
+    "is_weekend"
+  ],
+  "intercept": 1.7077064629567795,
+  "coefficients": [
+    -0.00561335476600539,
+    -0.0033823281980044258,
+    -0.0002546326235584751,
+    -0.009188920445552468,
+    -0.16167217852908294,
+    0.3269630379140376,
+    0.019232330507985555,
+    1.3014813941055743,
+    -0.00479692033737187,
+    -0.29014488010554107,
+    -0.03743164693568967,
+    -0.026977678889283475,
+    0.13117347358958348
+  ],
+  "metrics": {
+    "mae": 2.78,
+    "rmse": 4.11,
+    "train_samples": 49021,
+    "test_samples": 12978
+  },
+  "trained_at": "2026-04-15T15:02:54.081983+00:00",
+  "saved_at": "2026-04-15T15:02:54.081993+00:00"
+}

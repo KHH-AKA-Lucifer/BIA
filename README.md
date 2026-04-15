@@ -3,7 +3,7 @@
 A comprehensive Business Intelligence and Analysis (BIA) platform for monitoring, analyzing, and optimizing vending machine operations. Built as a 3-month team project for the Business Intelligence and Analysis course at the Asian Institute of Technology (AIT).
 
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
-![Python](https://img.shields.io/badge/Python-3.13+-blue)
+![Python](https://img.shields.io/badge/Python-3.11+-blue)
 ![React](https://img.shields.io/badge/React-19.2+-blue)
 ![Status](https://img.shields.io/badge/Status-Active%20Development-green)
 
@@ -113,7 +113,7 @@ A real-time dashboard that provides:
 ### DevOps
 - **Containerization**: Docker & Docker Compose
 - **Version Control**: Git
-- **Python Version**: 3.13+
+- **Python Version**: 3.11+
 - **Node Version**: 18+ (LTS)
 
 ---
@@ -152,7 +152,7 @@ A real-time dashboard that provides:
 
 Before you begin, ensure you have installed:
 
-- **Python 3.13+** ([Download](https://www.python.org/downloads/))
+- **Python 3.11+** ([Download](https://www.python.org/downloads/))
 - **Node.js 18+ LTS** ([Download](https://nodejs.org/))
 - **PostgreSQL 14+** ([Download](https://www.postgresql.org/download/))
 - **Git** ([Download](https://git-scm.com/))
@@ -161,7 +161,7 @@ Before you begin, ensure you have installed:
 ### Verify Installations
 
 ```bash
-python --version     # Should be 3.13+
+python --version     # Should be 3.11+
 node --version       # Should be 18+
 npm --version        # Should be 8+
 psql --version       # Should be 14+
@@ -211,10 +211,9 @@ This installs all dependencies from `backend/pyproject.toml`:
 
 #### 2c. Configure Environment Variables
 
-Create a backend `.env` file inside `backend/`:
+Create a shared project `.env` file at the repository root. Docker Compose and the backend both read this file:
 
 ```bash
-cd backend
 cp .env.example .env
 ```
 
@@ -261,6 +260,31 @@ Loaded migrations:
 - `e24ffe6eab49_add_role_to_users.py`
 - `ef75aaafe6a0_create_users_table.py`
 
+#### 4c. Create a Demo Admin User (Optional)
+
+```bash
+cd backend
+python scripts/seed_user.py --email admin@biademo.com --password 'ChangeMe123!' --role admin
+```
+
+### 5. Generate the Canonical Dashboard Dataset
+
+The dashboard now reads from `backend/app/data/expanded_vending_sales.csv` by default. Regenerate it whenever you want fresh synthetic data through April 15, 2026:
+
+```bash
+python3.11 scripts/generate_dataset.py \
+  --output backend/app/data/expanded_vending_sales.csv \
+  --rows 120000 \
+  --end-date 2026-04-15
+```
+
+The generator now creates:
+- full timestamps, not just date-only rows
+- daily, weekly, monthly, and hourly variation
+- machine-specific performance drift
+- location/category preference patterns
+- occasional anomalies for operational analysis
+
 ---
 
 ## 🚀 Running the Project
@@ -298,7 +322,7 @@ Open your browser and navigate to:
 
 ```bash
 # Start PostgreSQL only
-docker compose --env-file backend/.env up -d
+docker compose up -d
 
 # Database will be available at:
 # localhost:5440 (default)
@@ -306,7 +330,7 @@ docker compose --env-file backend/.env up -d
 
 To stop services:
 ```bash
-docker compose --env-file backend/.env down
+docker compose down
 ```
 
 ---
@@ -316,7 +340,7 @@ docker compose --env-file backend/.env down
 ```
 BIA/
 ├── backend/
-│   ├── .env.example             # Backend env template
+│   ├── .env.example             # Legacy backend env template (fallback)
 │   ├── app/                      # FastAPI application
 │   ├── alembic/                  # Database migrations
 │   ├── alembic.ini               # Alembic config
@@ -327,6 +351,7 @@ BIA/
 │   ├── .env.example
 │   ├── package.json
 │   └── vite.config.ts
+├── .env.example                  # Shared backend/docker env template
 ├── docker-compose.yml            # PostgreSQL service
 └── README.md                     # This file
 ```
@@ -358,7 +383,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### Dashboard
 - `GET /dashboard/summary` - Main analytics endpoint
-  - Returns: KPIs, machine data, alerts, revenue, profitability, utilization stats
+  - Returns: executive KPIs, ranked locations/categories/products/machines, revenue trend, hourly demand, category-location matrix, restock priorities, and forecast summaries
 
 #### Data
 - `GET /machines` - List all machines
@@ -373,7 +398,7 @@ Interactive API documentation available at: `http://localhost:8000/docs`
 
 ## ⚙️ Configuration
 
-### Backend Configuration (`backend/app/core/config.py`)
+### Backend Configuration (`.env`)
 
 ```env
 APP_NAME=Data Dashboard Backend
@@ -388,6 +413,7 @@ JWT_SECRET_KEY=change-me
 JWT_ALGORITHM=HS256
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
 LOG_LEVEL=INFO
+DASHBOARD_DATASET_PATH=backend/app/data/expanded_vending_sales.csv
 ```
 
 ### Frontend Configuration (`frontend/.env`)
@@ -399,7 +425,7 @@ VITE_API_V1=/api/v1
 
 ### Database Configuration
 
-Edit `backend/.env` to change database connection settings:
+Edit the project root `.env` to change database connection settings. The backend also accepts `backend/.env` as a fallback, but the root `.env` is the source of truth for local development:
 
 ```env
 POSTGRES_HOST=localhost
@@ -408,6 +434,8 @@ POSTGRES_DB=datadashboard
 POSTGRES_USER=your_postgres_user
 POSTGRES_PASSWORD=your_postgres_password
 ```
+
+`DASHBOARD_DATASET_PATH` controls which CSV the analytics API reads. The default canonical dataset is `backend/app/data/expanded_vending_sales.csv`.
 
 ---
 
@@ -568,7 +596,7 @@ python -m uvicorn app.main:app --port 8001
 # Check PostgreSQL is running
 psql -U postgres  # Should connect successfully
 
-# Verify POSTGRES_* values in backend/.env
+# Verify POSTGRES_* values in .env
 ```
 
 **Migration errors**

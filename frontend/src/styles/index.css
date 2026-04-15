@@ -9,7 +9,16 @@
 }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: #f7f8fa;
+  color: #0f172a;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }

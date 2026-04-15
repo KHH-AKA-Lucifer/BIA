@@ -1,0 +1,637 @@
+{
+  "model_name": "Location Segmentation",
+  "model_type": "K-Means Clustering",
+  "task_type": "clustering",
+  "scope": "location",
+  "features": [
+    "avg_daily_revenue",
+    "revenue_volatility",
+    "avg_ticket",
+    "weekend_share",
+    "beverage_share",
+    "top_category_share",
+    "peak_hour"
+  ],
+  "centroids": [
+    [
+      5.805413815937629,
+      4.814617141223275,
+      2.7216938635914465,
+      0.3029694880761376,
+      0.5243064184037883,
+      0.22665122348472436,
+      14.0
+    ],
+    [
+      4.065287451650381,
+      3.5276335400756675,
+      2.7443597350504527,
+      0.2997884969867594,
+      0.5503050914485675,
+      0.2151941928397959,
+      16.833333333333332
+    ],
+    [
+      5.359950833257928,
+      4.699405288014313,
+      2.778285095781431,
+      0.26433072569990385,
+      0.5430806532239678,
+      0.21357457581762174,
+      15.0
+    ],
+    [
+      3.9019104089628676,
+      3.225370534053715,
+      2.6919609923263175,
+      0.29184280658631045,
+      0.5262436681101765,
+      0.22952160639995098,
+      13.695652173913043
+    ]
+  ],
+  "segments": [
+    {
+      "location": "Bayview Market",
+      "segment_id": 0,
+      "segment_name": "Steady Core",
+      "avg_daily_revenue": 5.52,
+      "avg_ticket": 2.67,
+      "weekend_share": 0.273,
+      "peak_hour": 12
+    },
+    {
+      "location": "Broadway Square",
+      "segment_id": 0,
+      "segment_name": "Steady Core",
+      "avg_daily_revenue": 5.24,
+      "avg_ticket": 2.68,
+      "weekend_share": 0.295,
+      "peak_hour": 12
+    },
+    {
+      "location": "Broadway Square Synth 78",
+      "segment_id": 0,
+      "segment_name": "Steady Core",
+      "avg_daily_revenue": 4.17,
+      "avg_ticket": 2.79,
+      "weekend_share": 0.297,
+      "peak_hour": 12
+    },
+    {
+      "location": "Brunswick Sq Mall",
+      "segment_id": 0,
+      "segment_name": "Steady Core",
+      "avg_daily_revenue": 5.79,
+      "avg_ticket": 2.76,
+      "weekend_share": 0.31,
+      "peak_hour": 18
+    },
+    {
+      "location": "Canyon Ridge Market",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 3.93,
+      "avg_ticket": 2.71,
+      "weekend_share": 0.291,
+      "peak_hour": 12
+    },
+    {
+      "location": "CityCentre",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 3.85,
+      "avg_ticket": 2.73,
+      "weekend_share": 0.228,
+      "peak_hour": 12
+    },
+    {
+      "location": "Clearwater Mall Synth 63",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 3.84,
+      "avg_ticket": 2.64,
+      "weekend_share": 0.274,
+      "peak_hour": 12
+    },
+    {
+      "location": "EB Public Library",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 4.02,
+      "avg_ticket": 2.69,
+      "weekend_share": 0.321,
+      "peak_hour": 17
+    },
+    {
+      "location": "EB Public Library Synth 62",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 5.19,
+      "avg_ticket": 2.66,
+      "weekend_share": 0.302,
+      "peak_hour": 18
+    },
+    {
+      "location": "Earle Asphalt",
+      "segment_id": 2,
+      "segment_name": "High Potential",
+      "avg_daily_revenue": 5.42,
+      "avg_ticket": 2.83,
+      "weekend_share": 0.317,
+      "peak_hour": 12
+    },
+    {
+      "location": "Earle Asphalt Synth 64",
+      "segment_id": 0,
+      "segment_name": "Steady Core",
+      "avg_daily_revenue": 5.39,
+      "avg_ticket": 2.76,
+      "weekend_share": 0.293,
+      "peak_hour": 12
+    },
+    {
+      "location": "Earle Asphalt Synth 85",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 3.71,
+      "avg_ticket": 2.69,
+      "weekend_share": 0.331,
+      "peak_hour": 12
+    },
+    {
+      "location": "Eastwood Marketplace",
+      "segment_id": 0,
+      "segment_name": "Steady Core",
+      "avg_daily_revenue": 5.48,
+      "avg_ticket": 2.69,
+      "weekend_share": 0.331,
+      "peak_hour": 17
+    },
+    {
+      "location": "Eastwood Marketplace Synth 61",
+      "segment_id": 2,
+      "segment_name": "High Potential",
+      "avg_daily_revenue": 5.98,
+      "avg_ticket": 2.83,
+      "weekend_share": 0.237,
+      "peak_hour": 18
+    },
+    {
+      "location": "Elmwood Plaza",
+      "segment_id": 0,
+      "segment_name": "Steady Core",
+      "avg_daily_revenue": 7.37,
+      "avg_ticket": 2.7,
+      "weekend_share": 0.311,
+      "peak_hour": 12
+    },
+    {
+      "location": "Fairway Center",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 4.1,
+      "avg_ticket": 2.73,
+      "weekend_share": 0.308,
+      "peak_hour": 18
+    },
+    {
+      "location": "Fairway Center Synth 70",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 3.97,
+      "avg_ticket": 2.76,
+      "weekend_share": 0.281,
+      "peak_hour": 12
+    },
+    {
+      "location": "Forest Hill Center Synth 65",
+      "segment_id": 2,
+      "segment_name": "High Potential",
+      "avg_daily_revenue": 5.44,
+      "avg_ticket": 2.81,
+      "weekend_share": 0.26,
+      "peak_hour": 18
+    },
+    {
+      "location": "Galleria Mall",
+      "segment_id": 0,
+      "segment_name": "Steady Core",
+      "avg_daily_revenue": 6.15,
+      "avg_ticket": 2.81,
+      "weekend_share": 0.349,
+      "peak_hour": 12
+    },
+    {
+      "location": "Galleria Mall Synth 77",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 3.84,
+      "avg_ticket": 2.75,
+      "weekend_share": 0.28,
+      "peak_hour": 17
+    },
+    {
+      "location": "Galleria Mall Synth 82",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 3.93,
+      "avg_ticket": 2.66,
+      "weekend_share": 0.365,
+      "peak_hour": 18
+    },
+    {
+      "location": "Golden Gate Plaza",
+      "segment_id": 2,
+      "segment_name": "High Potential",
+      "avg_daily_revenue": 4.98,
+      "avg_ticket": 2.73,
+      "weekend_share": 0.264,
+      "peak_hour": 17
+    },
+    {
+      "location": "Grand Avenue Mall",
+      "segment_id": 0,
+      "segment_name": "Steady Core",
+      "avg_daily_revenue": 5.4,
+      "avg_ticket": 2.71,
+      "weekend_share": 0.289,
+      "peak_hour": 12
+    },
+    {
+      "location": "Grand Avenue Mall Synth 58",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 3.7,
+      "avg_ticket": 2.7,
+      "weekend_share": 0.289,
+      "peak_hour": 13
+    },
+    {
+      "location": "Granite Falls Plaza",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 3.72,
+      "avg_ticket": 2.65,
+      "weekend_share": 0.279,
+      "peak_hour": 13
+    },
+    {
+      "location": "GuttenPlans",
+      "segment_id": 2,
+      "segment_name": "High Potential",
+      "avg_daily_revenue": 5.91,
+      "avg_ticket": 2.75,
+      "weekend_share": 0.25,
+      "peak_hour": 12
+    },
+    {
+      "location": "Harborview Market",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 4.17,
+      "avg_ticket": 2.67,
+      "weekend_share": 0.272,
+      "peak_hour": 8
+    },
+    {
+      "location": "Harborview Market Synth 75",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 3.72,
+      "avg_ticket": 2.59,
+      "weekend_share": 0.292,
+      "peak_hour": 12
+    },
+    {
+      "location": "Harborview Market Synth 75 Synth 81",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 4.04,
+      "avg_ticket": 2.86,
+      "weekend_share": 0.284,
+      "peak_hour": 12
+    },
+    {
+      "location": "Highland Center",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 3.81,
+      "avg_ticket": 2.75,
+      "weekend_share": 0.264,
+      "peak_hour": 18
+    },
+    {
+      "location": "Highland Center Synth 55",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 4.14,
+      "avg_ticket": 2.74,
+      "weekend_share": 0.281,
+      "peak_hour": 12
+    },
+    {
+      "location": "Kingsway Center",
+      "segment_id": 2,
+      "segment_name": "High Potential",
+      "avg_daily_revenue": 3.82,
+      "avg_ticket": 2.84,
+      "weekend_share": 0.243,
+      "peak_hour": 12
+    },
+    {
+      "location": "Maple Valley Plaza",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 4.03,
+      "avg_ticket": 2.77,
+      "weekend_share": 0.296,
+      "peak_hour": 18
+    },
+    {
+      "location": "Maple Valley Plaza Synth 59",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 3.6,
+      "avg_ticket": 2.69,
+      "weekend_share": 0.289,
+      "peak_hour": 12
+    },
+    {
+      "location": "Maple Valley Plaza Synth 59 Synth 80",
+      "segment_id": 2,
+      "segment_name": "High Potential",
+      "avg_daily_revenue": 4.31,
+      "avg_ticket": 2.89,
+      "weekend_share": 0.264,
+      "peak_hour": 18
+    },
+    {
+      "location": "Meadowbrook Mall",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 4.03,
+      "avg_ticket": 2.69,
+      "weekend_share": 0.312,
+      "peak_hour": 18
+    },
+    {
+      "location": "Meadowbrook Mall Synth 67",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 3.97,
+      "avg_ticket": 2.67,
+      "weekend_share": 0.309,
+      "peak_hour": 12
+    },
+    {
+      "location": "Meadowbrook Mall Synth 79",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 3.92,
+      "avg_ticket": 2.73,
+      "weekend_share": 0.317,
+      "peak_hour": 12
+    },
+    {
+      "location": "Midtown Station Synth 56",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 4.02,
+      "avg_ticket": 2.71,
+      "weekend_share": 0.276,
+      "peak_hour": 12
+    },
+    {
+      "location": "Midtown Station Synth 56 Synth 72",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 3.98,
+      "avg_ticket": 2.93,
+      "weekend_share": 0.303,
+      "peak_hour": 18
+    },
+    {
+      "location": "Northpoint Mall",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 3.94,
+      "avg_ticket": 2.75,
+      "weekend_share": 0.282,
+      "peak_hour": 12
+    },
+    {
+      "location": "Northridge Mall",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 4.05,
+      "avg_ticket": 2.69,
+      "weekend_share": 0.328,
+      "peak_hour": 18
+    },
+    {
+      "location": "Oak Park Mall",
+      "segment_id": 2,
+      "segment_name": "High Potential",
+      "avg_daily_revenue": 5.26,
+      "avg_ticket": 2.69,
+      "weekend_share": 0.247,
+      "peak_hour": 14
+    },
+    {
+      "location": "Parkside Mall Synth 60",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 5.27,
+      "avg_ticket": 2.81,
+      "weekend_share": 0.33,
+      "peak_hour": 18
+    },
+    {
+      "location": "Parkside Mall Synth 74",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 4.53,
+      "avg_ticket": 2.82,
+      "weekend_share": 0.315,
+      "peak_hour": 18
+    },
+    {
+      "location": "Pioneer Plaza",
+      "segment_id": 2,
+      "segment_name": "High Potential",
+      "avg_daily_revenue": 5.61,
+      "avg_ticket": 2.75,
+      "weekend_share": 0.298,
+      "peak_hour": 17
+    },
+    {
+      "location": "Plainsview Market",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 3.92,
+      "avg_ticket": 2.77,
+      "weekend_share": 0.306,
+      "peak_hour": 12
+    },
+    {
+      "location": "Plainsview Market Synth 69",
+      "segment_id": 0,
+      "segment_name": "Steady Core",
+      "avg_daily_revenue": 8.34,
+      "avg_ticket": 2.67,
+      "weekend_share": 0.302,
+      "peak_hour": 18
+    },
+    {
+      "location": "Ridgewood Center Synth 57",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 3.92,
+      "avg_ticket": 2.67,
+      "weekend_share": 0.304,
+      "peak_hour": 18
+    },
+    {
+      "location": "Royal Oaks Plaza",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 4.08,
+      "avg_ticket": 2.64,
+      "weekend_share": 0.282,
+      "peak_hour": 12
+    },
+    {
+      "location": "Silver Springs Mall",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 3.93,
+      "avg_ticket": 2.82,
+      "weekend_share": 0.344,
+      "peak_hour": 13
+    },
+    {
+      "location": "Skyline Center",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 3.7,
+      "avg_ticket": 2.6,
+      "weekend_share": 0.288,
+      "peak_hour": 18
+    },
+    {
+      "location": "Skyline Center Synth 73",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 3.65,
+      "avg_ticket": 2.68,
+      "weekend_share": 0.311,
+      "peak_hour": 16
+    },
+    {
+      "location": "Southpointe Plaza",
+      "segment_id": 2,
+      "segment_name": "High Potential",
+      "avg_daily_revenue": 5.22,
+      "avg_ticket": 2.75,
+      "weekend_share": 0.26,
+      "peak_hour": 18
+    },
+    {
+      "location": "Stonebridge Mall",
+      "segment_id": 2,
+      "segment_name": "High Potential",
+      "avg_daily_revenue": 6.87,
+      "avg_ticket": 2.73,
+      "weekend_share": 0.259,
+      "peak_hour": 12
+    },
+    {
+      "location": "Sunset Strip Plaza",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 3.81,
+      "avg_ticket": 2.78,
+      "weekend_share": 0.277,
+      "peak_hour": 18
+    },
+    {
+      "location": "Sunset Strip Plaza Synth 71",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 3.76,
+      "avg_ticket": 2.74,
+      "weekend_share": 0.292,
+      "peak_hour": 18
+    },
+    {
+      "location": "Sunset Strip Plaza Synth 76",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 4.0,
+      "avg_ticket": 2.7,
+      "weekend_share": 0.25,
+      "peak_hour": 17
+    },
+    {
+      "location": "Sunset Strip Plaza Synth 84",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 4.2,
+      "avg_ticket": 2.69,
+      "weekend_share": 0.339,
+      "peak_hour": 18
+    },
+    {
+      "location": "Tech Corridor Mall Synth 68",
+      "segment_id": 0,
+      "segment_name": "Steady Core",
+      "avg_daily_revenue": 4.99,
+      "avg_ticket": 2.71,
+      "weekend_share": 0.285,
+      "peak_hour": 17
+    },
+    {
+      "location": "Tidewater Plaza",
+      "segment_id": 2,
+      "segment_name": "High Potential",
+      "avg_daily_revenue": 5.49,
+      "avg_ticket": 2.75,
+      "weekend_share": 0.274,
+      "peak_hour": 12
+    },
+    {
+      "location": "Valley View Center",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 3.39,
+      "avg_ticket": 2.66,
+      "weekend_share": 0.273,
+      "peak_hour": 18
+    },
+    {
+      "location": "Valley View Center Synth 66",
+      "segment_id": 1,
+      "segment_name": "Commuter Spike",
+      "avg_daily_revenue": 3.89,
+      "avg_ticket": 2.75,
+      "weekend_share": 0.276,
+      "peak_hour": 18
+    },
+    {
+      "location": "Westfield Market Synth 83",
+      "segment_id": 3,
+      "segment_name": "Low Momentum",
+      "avg_daily_revenue": 3.64,
+      "avg_ticket": 2.61,
+      "weekend_share": 0.271,
+      "peak_hour": 18
+    }
+  ],
+  "metrics": {
+    "clusters": 4,
+    "locations": 64
+  },
+  "trained_at": "2026-04-15T15:03:21.069206+00:00",
+  "saved_at": "2026-04-15T15:03:21.069216+00:00"
+}

@@ -1,0 +1,46 @@
+{
+  "model_name": "Machine Revenue Forecaster",
+  "model_type": "Linear Regression",
+  "task_type": "forecasting",
+  "scope": "machine",
+  "target": "next_day_revenue",
+  "features": [
+    "lag_1",
+    "lag_3",
+    "lag_7",
+    "rolling_3",
+    "rolling_7",
+    "rolling_14",
+    "txn_lag_1",
+    "txn_rolling_7",
+    "dow_sin",
+    "dow_cos",
+    "month_sin",
+    "month_cos",
+    "is_weekend"
+  ],
+  "intercept": 3.630542284050597,
+  "coefficients": [
+    -0.006333667777367501,
+    -0.0034117321928777374,
+    0.003695136021075479,
+    0.0027959807321600427,
+    -0.02931645648151246,
+    0.04081305138265959,
+    -0.0003683180074840423,
+    0.1634241442098253,
+    0.0034747094386812054,
+    -0.1783610996030427,
+    -0.04957618446964314,
+    -0.035215531688723004,
+    0.11095576369108759
+  ],
+  "metrics": {
+    "mae": 2.25,
+    "rmse": 3.45,
+    "train_samples": 58735,
+    "test_samples": 15684
+  },
+  "trained_at": "2026-04-15T15:03:05.785894+00:00",
+  "saved_at": "2026-04-15T15:03:05.785901+00:00"
+}

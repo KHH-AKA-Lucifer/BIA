@@ -1,4 +1,3 @@
-# import required modules
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -6,7 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
-ENV_FILE = BACKEND_ROOT / ".env"
+PROJECT_ROOT = BACKEND_ROOT.parent
+ENV_FILES = (BACKEND_ROOT / ".env", PROJECT_ROOT / ".env")
 
 class Settings(BaseSettings):
     """
@@ -31,10 +31,20 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     # LOGs
     LOG_LEVEL: str = "INFO"
+    DASHBOARD_DATASET_PATH: str = "backend/app/data/expanded_vending_sales.csv"
+    MODEL_ARTIFACTS_PATH: str = "backend/app/data/model_artifacts"
+    OPENAI_API_KEY: str | None = None
+    OPENAI_MODEL: str = "gpt-4.1-mini"
+    GROQ_API_KEY: str | None = None
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    LLM_REQUEST_TIMEOUT_SECONDS: int = 20
 
     # configuration for the secrets 
     model_config = SettingsConfigDict(
-        env_file=ENV_FILE,
+        # Prefer the shared project-root .env when it exists so Docker and the
+        # backend read the same database credentials. Keep backend/.env as a
+        # fallback for local setups that still use the older layout.
+        env_file=ENV_FILES,
         env_file_encoding="utf-8",
         case_sensitive=True
     )
@@ -47,5 +57,19 @@ class Settings(BaseSettings):
             f"postgresql+psycopg://{self.POSTGRES_USER}:{encoded_password}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"        
             )
+
+    @property
+    def dataset_path(self) -> Path:
+        configured_path = Path(self.DASHBOARD_DATASET_PATH)
+        if configured_path.is_absolute():
+            return configured_path
+        return PROJECT_ROOT / configured_path
+
+    @property
+    def model_artifacts_path(self) -> Path:
+        configured_path = Path(self.MODEL_ARTIFACTS_PATH)
+        if configured_path.is_absolute():
+            return configured_path
+        return PROJECT_ROOT / configured_path
     
 settings = Settings()
