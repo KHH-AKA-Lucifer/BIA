@@ -63,19 +63,19 @@ const MachineDetailPanel: React.FC<MachineDetailPanelProps> = ({
   }
 
   const sectionHeading: React.CSSProperties = {
-    fontSize: '11px',
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.35)',
+    fontSize: '12px',
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.9)',
     textTransform: 'uppercase',
-    letterSpacing: '0.8px',
-    margin: '0 0 10px 0',
+    letterSpacing: '1px',
+    margin: '0 0 12px 0',
   }
 
   const statBox: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: '10px',
-    padding: '12px 14px',
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: '12px',
+    padding: '16px 18px',
     flex: 1,
   }
 

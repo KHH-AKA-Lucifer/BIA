@@ -30,7 +30,7 @@ type TabType = 'overview' | 'machines' | 'sites'
 type MachinesSubTab = 'grid' | 'distribution' | 'scatter' | 'trends'
 interface MachineItem { id: string; utilization: number }
 
-const getStatusColor  = (u: number) => u >= 70 ? '#22c55e' : u >= 40 ? '#eab308' : '#ef4444'
+const getStatusColor  = (u: number) => u >= 70 ? '#00c853' : u >= 40 ? '#ffb300' : '#ff5252'
 const getStatusBg     = (u: number) => u >= 70 ? 'rgba(34,197,94,0.12)' : u >= 40 ? 'rgba(234,179,8,0.12)' : 'rgba(239,68,68,0.12)'
 const getStatusBorder = (u: number) => u >= 70 ? 'rgba(34,197,94,0.3)'  : u >= 40 ? 'rgba(234,179,8,0.3)'  : 'rgba(239,68,68,0.3)'
 const seededRand = (seed: string) => { let h = 0; for (let i = 0; i < seed.length; i++) h = Math.imul(31, h) + seed.charCodeAt(i) | 0; return Math.abs(h % 1000) / 1000 }
@@ -102,9 +102,9 @@ const DashboardPage: React.FC = () => {
   const scatterPoints = filteredMachines.map(m => ({ label: m.id, x: m.utilization, y: machineRevenueMap[m.id] ?? 0, color: getStatusColor(m.utilization), r: 5 }))
 
   const boxGroups = [
-    { label: 'Healthy',  values: machines.filter(m => m.utilization >= 70).map(m => m.utilization),                         color: '#22c55e' },
-    { label: 'Warning',  values: machines.filter(m => m.utilization >= 40 && m.utilization < 70).map(m => m.utilization),   color: '#eab308' },
-    { label: 'Critical', values: machines.filter(m => m.utilization < 40).map(m => m.utilization),                          color: '#ef4444' },
+    { label: 'Healthy',  values: machines.filter(m => m.utilization >= 70).map(m => m.utilization),                         color: '#00c853' },
+    { label: 'Warning',  values: machines.filter(m => m.utilization >= 40 && m.utilization < 70).map(m => m.utilization),   color: '#ffb300' },
+    { label: 'Critical', values: machines.filter(m => m.utilization < 40).map(m => m.utilization),                          color: '#ff5252' },
   ].filter(g => g.values.length > 0)
 
   const violinGroups = boxGroups.filter(g => g.values.length >= 3)
@@ -144,14 +144,14 @@ const DashboardPage: React.FC = () => {
   const machineAlerts   = data?.alerts?.filter((a: string) => selectedMachineId && a.startsWith(selectedMachineId)) ?? []
   const restockList     = [...machines].sort((a, b) => a.utilization - b.utilization).slice(0, 10).map(m => ({ ...m, hasAlert: data?.alerts?.some((a: string) => a.startsWith(m.id)) ?? false }))
 
-  const COLORS      = ['#60a5fa', '#a78bfa', '#34d399', '#fbbf24', '#f87171', '#fb923c', '#38bdf8', '#e879f9']
+  const COLORS      = ['#0066FF', '#8f39ff', '#00c853', '#ffaa00', '#ff5252', '#ff6f00', '#00e676', '#00b3ff']
   const SITE_COLORS = ['#60a5fa', '#34d399', '#fbbf24', '#a78bfa', '#f87171']
 
   const cardStyle: React.CSSProperties = { background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', boxShadow: '0 4px 24px rgba(0,0,0,0.2)' }
-  const sh: React.CSSProperties = { fontSize: '12px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }
-  const tabBtn = (a: boolean, c = '#60a5fa'): React.CSSProperties => ({ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', border: a ? `1px solid ${c}40` : '1px solid transparent', background: a ? `${c}18` : 'transparent', color: a ? c : 'rgba(255,255,255,0.5)', fontSize: '13px', fontWeight: a ? '600' : '500', cursor: 'pointer', transition: 'all 0.2s' })
-  const subTabBtn = (a: boolean): React.CSSProperties => ({ padding: '6px 14px', borderRadius: '7px', fontSize: '12px', cursor: 'pointer', border: a ? '1px solid rgba(167,139,250,0.4)' : '1px solid rgba(255,255,255,0.08)', background: a ? 'rgba(167,139,250,0.15)' : 'rgba(255,255,255,0.03)', color: a ? '#a78bfa' : 'rgba(255,255,255,0.4)', fontWeight: a ? '600' : '400', transition: 'all 0.2s' })
-  const pillBtn  = (a: boolean, c = '#60a5fa'): React.CSSProperties => ({ padding: '5px 12px', borderRadius: '6px', border: a ? `1px solid ${c}50` : '1px solid rgba(255,255,255,0.1)', background: a ? `${c}20` : 'transparent', color: a ? c : 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: a ? '600' : '500', cursor: 'pointer', transition: 'all 0.2s' })
+  const sh: React.CSSProperties = { fontSize: '14px', fontWeight: '800', color: 'rgba(255,255,255,0.9)', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 14px 0' }
+  const tabBtn = (a: boolean, c = '#60a5fa'): React.CSSProperties => ({ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', border: a ? `1px solid ${c}40` : '1px solid transparent', background: a ? `${c}18` : 'transparent', color: a ? c : 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: a ? '800' : '600', cursor: 'pointer', transition: 'all 0.2s' })
+  const subTabBtn = (a: boolean): React.CSSProperties => ({ padding: '6px 14px', borderRadius: '7px', fontSize: '12px', cursor: 'pointer', border: a ? '1px solid rgba(167,139,250,0.4)' : '1px solid rgba(255,255,255,0.08)', background: a ? 'rgba(167,139,250,0.15)' : 'rgba(255,255,255,0.03)', color: a ? '#a78bfa' : 'rgba(255,255,255,0.8)', fontWeight: a ? '600' : '400', transition: 'all 0.2s' })
+  const pillBtn  = (a: boolean, c = '#60a5fa'): React.CSSProperties => ({ padding: '5px 12px', borderRadius: '6px', border: a ? `1px solid ${c}50` : '1px solid rgba(255,255,255,0.1)', background: a ? `${c}20` : 'transparent', color: a ? c : 'rgba(255,255,255,0.8)', fontSize: '11px', fontWeight: a ? '600' : '500', cursor: 'pointer', transition: 'all 0.2s' })
   const ttStyle  = { backgroundColor: 'rgba(10,15,30,0.97)', border: '1px solid rgba(96,165,250,0.25)', borderRadius: '8px', color: '#fff', fontSize: '12px' }
 
   return (
@@ -163,12 +163,12 @@ const DashboardPage: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '60px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Cpu style={{ width: '16px', height: '16px', color: '#fff' }} /></div>
-              <div><div style={{ fontSize: '15px', fontWeight: '700', color: '#fff', letterSpacing: '-0.3px' }}>VendoSight</div><div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginTop: '-1px' }}>Vending Intelligence Dashboard</div></div>
+              <div><div style={{ fontSize: '15px', fontWeight: '700', color: '#fff', letterSpacing: '-0.3px' }}>VendoSight</div><div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.85)', marginTop: '-1px' }}>Vending Intelligence Dashboard</div></div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ display: 'flex', gap: '4px', marginRight: '8px' }}>{(['week','month','quarter'] as const).map(p => <button key={p} onClick={() => setDateRange(p)} style={pillBtn(dateRange === p)}>{p.charAt(0).toUpperCase()+p.slice(1)}</button>)}</div>
               <button onClick={refresh} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: '12px', opacity: loading ? 0.5 : 1 }}><RefreshCw style={{ width: '13px', height: '13px' }} className={loading ? 'animate-spin' : ''} />Refresh</button>
-              <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '12px', padding: '0 8px', borderRight: '1px solid rgba(255,255,255,0.1)' }}>{user?.email}</span>
+              <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '12px', padding: '0 8px', borderRight: '1px solid rgba(255,255,255,0.1)' }}>{user?.email}</span>
               <button onClick={() => { logout(); window.location.href = '/login' }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', cursor: 'pointer', fontSize: '12px' }}><LogOut style={{ width: '13px', height: '13px' }} />Logout</button>
             </div>
           </div>
@@ -194,19 +194,19 @@ const DashboardPage: React.FC = () => {
       </div>
 
       <main style={{ flex: 1, maxWidth: '1600px', margin: '0 auto', width: '100%', padding: '20px 20px 60px' }}>
-        {error && <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '10px', color: '#fca5a5', fontSize: '13px' }}>{error}</div>}
+        {error && <div style={{ marginBottom: '18px', padding: '14px 18px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '10px', color: '#fca5a5', fontSize: '13px' }}>{error}</div>}
 
         {/* ─── OVERVIEW ─── */}
         {activeTab === 'overview' && (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '14px', marginBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '18px', marginBottom: '24px' }}>
               <KPICard title="Total Revenue" value={`$${(totalRevenue/1000).toFixed(1)}K`} icon="revenue" trend={profitTrend?.up?'up':'down'} trendValue={profitTrend?`${profitTrend.pct}% ${comparisonLabel}`:undefined} loading={loading} />
               <KPICard title="Active Machines" value={machines.length} icon="machines" trendValue={`${healthStatus.healthy} healthy · ${healthStatus.warning} warning`} trend="neutral" loading={loading} />
               <KPICard title="Average Activity" value={`${avgUtilization.toFixed(1)}%`} icon="utilization" trendValue={avgUtilization>=70?'Fleet performing well':avgUtilization>=40?'Some machines underperforming':'Fleet needs attention'} trend={avgUtilization>=70?'up':'down'} loading={loading} />
               <KPICard title="Active Alerts" value={alertCount} icon="alerts" trendValue={alertCount===0?'All machines normal':`${healthStatus.critical} critical · ${healthStatus.warning} warning`} trend={alertCount===0?'up':'down'} loading={loading} />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: '14px', marginBottom: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: '18px', marginBottom: '16px' }}>
               <div style={{ ...cardStyle, padding: '18px' }}>
                 <p style={sh}>Revenue trend</p>
                 <ResponsiveContainer width="100%" height={200}>
@@ -215,7 +215,7 @@ const DashboardPage: React.FC = () => {
                     <XAxis dataKey="day" stroke="rgba(255,255,255,0.3)" style={{ fontSize: '11px' }} />
                     <YAxis stroke="rgba(255,255,255,0.3)" style={{ fontSize: '11px' }} tickFormatter={v=>`$${v}K`} />
                     <Tooltip contentStyle={ttStyle} formatter={(v:any)=>[`$${Number(v).toFixed(1)}K`,'Revenue']} />
-                    <Line type="monotone" dataKey="revenue" stroke="#60a5fa" strokeWidth={2.5} dot={{ fill:'#60a5fa',r:3 }} activeDot={{ r:5,fill:'#93c5fd' }} />
+                    <Line type="monotone" dataKey="revenue" stroke="#0066FF" strokeWidth={3} dot={{ fill:'#0066FF',r:3 }} activeDot={{ r:5,fill:'#93c5fd' }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -229,8 +229,8 @@ const DashboardPage: React.FC = () => {
                     <Tooltip contentStyle={ttStyle} />
                     <Legend iconSize={8} wrapperStyle={{ fontSize:'11px',color:'rgba(255,255,255,0.5)' }} />
                     <Area type="monotone" dataKey="critical" stackId="1" stroke="#ef4444" fill="rgba(239,68,68,0.3)"  name="Critical" />
-                    <Area type="monotone" dataKey="warning"  stackId="1" stroke="#eab308" fill="rgba(234,179,8,0.3)"  name="Warning"  />
-                    <Area type="monotone" dataKey="healthy"  stackId="1" stroke="#22c55e" fill="rgba(34,197,94,0.3)"  name="Healthy"  />
+                    <Area type="monotone" dataKey="warning"  stackId="1" stroke="#ffb300" fill="rgba(255,179,0,0.3)"  name="Warning"  />
+                    <Area type="monotone" dataKey="healthy"  stackId="1" stroke="#00c853" fill="rgba(0,200,83,0.3)"  name="Healthy"  />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -250,12 +250,12 @@ const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '18px' }}>
               <div style={{ ...cardStyle, padding: '18px' }}>
                 <p style={sh}>Fleet health</p>
                 <StackedStatusBar healthy={healthStatus.healthy} warning={healthStatus.warning} critical={healthStatus.critical} total={machines.length} height={36} onSegmentClick={s=>{setActiveTab('machines');setStatusFilter(s)}} />
                 <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {[{ label:'Healthy',count:healthStatus.healthy,color:'#22c55e',s:'healthy'as const },{ label:'Warning',count:healthStatus.warning,color:'#eab308',s:'warning'as const },{ label:'Needs attention',count:healthStatus.critical,color:'#ef4444',s:'critical'as const }].map(item=>(
+                  {[{ label:'Healthy',count:healthStatus.healthy,color:'#00c853',s:'healthy'as const },{ label:'Warning',count:healthStatus.warning,color:'#ffb300',s:'warning'as const },{ label:'Needs attention',count:healthStatus.critical,color:'#ff5252',s:'critical'as const }].map(item=>(
                     <div key={item.label} style={{ cursor:'pointer' }} onClick={()=>{setActiveTab('machines');setStatusFilter(item.s)}}>
                       <div style={{ display:'flex',justifyContent:'space-between',marginBottom:'5px' }}><span style={{ fontSize:'12px',color:item.color,fontWeight:'600' }}>{item.label}</span><span style={{ fontSize:'12px',color:'rgba(255,255,255,0.6)',fontWeight:'600' }}>{item.count}<span style={{ fontSize:'10px',color:'rgba(255,255,255,0.3)' }}> / {machines.length}</span></span></div>
                       <div style={{ height:'6px',background:'rgba(255,255,255,0.07)',borderRadius:'3px',overflow:'hidden' }}><div style={{ width:`${machines.length?(item.count/machines.length)*100:0}%`,height:'100%',background:item.color,borderRadius:'3px',transition:'width 0.5s' }} /></div>
@@ -311,7 +311,7 @@ const DashboardPage: React.FC = () => {
                 ))}
               </div>
             )}
-            <div style={{ display:'grid',gridTemplateColumns:selectedMachineId?'1fr 380px':'1fr',gap:'16px',alignItems:'start' }}>
+            <div style={{ display:'grid',gridTemplateColumns:selectedMachineId?'1fr 380px':'1fr',gap:'20px',alignItems:'start' }}>
               <div>
                 {/* GRID sub-tab */}
                 {machinesSubTab==='grid'&&(
@@ -344,7 +344,7 @@ const DashboardPage: React.FC = () => {
                     )}
                     <div style={{ ...cardStyle,padding:'20px' }}>
                       <p style={sh}>Fleet composition by performance band</p>
-                      <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'12px',marginBottom:'16px' }}>
+                      <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'18px',marginBottom:'20px' }}>
                         {[{label:'Elite',range:'90–100%',min:90,max:101,color:'#10b981'},{label:'Good',range:'70–89%',min:70,max:90,color:'#22c55e'},{label:'Average',range:'40–69%',min:40,max:70,color:'#eab308'},{label:'Low',range:'20–39%',min:20,max:40,color:'#f97316'},{label:'Critical',range:'0–19%',min:0,max:20,color:'#ef4444'}].map(tier=>{
                           const cnt=filteredMachines.filter(m=>m.utilization>=tier.min&&m.utilization<tier.max).length
                           return <div key={tier.label} style={{ ...cardStyle,padding:'14px',textAlign:'center',borderColor:`${tier.color}40` }}><div style={{ fontSize:'11px',fontWeight:'700',color:tier.color,marginBottom:'8px',textTransform:'uppercase',letterSpacing:'0.5px' }}>{tier.label}</div><div style={{ fontSize:'28px',fontWeight:'800',color:tier.color,lineHeight:1 }}>{cnt}</div><div style={{ fontSize:'10px',color:'rgba(255,255,255,0.35)',marginTop:'4px' }}>{tier.range}</div></div>
