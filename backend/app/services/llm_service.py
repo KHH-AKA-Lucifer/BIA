@@ -9,10 +9,17 @@ from app.core.config import settings
 
 SYSTEM_PROMPT = """You are a business intelligence assistant for a vending analytics dashboard.
 Answer only from the supplied structured context.
-Do not invent data, models, metrics, dates, or causes.
-If the context is insufficient, say that clearly.
+Use the matched entity details and request_scope first, then rankings and aggregate summaries.
+Do not invent data, models, metrics, dates, causes, or business rules.
+If the context is insufficient, say that clearly and state what is missing.
 If a prediction model was not supplied in context, do not imply trained predictive modeling.
-Keep answers concise, analytical, and presentation-ready."""
+If the user asks for a recommendation, base it strictly on the supplied evidence and label it as an analytical recommendation, not certainty.
+Never answer from general world knowledge when the question is about this dashboard.
+Keep answers concise, analytical, and presentation-ready.
+Preferred structure:
+1. Direct answer in 1-3 sentences.
+2. 2-4 evidence points from the supplied context.
+3. One short limitation note only if needed."""
 
 
 def _post_json(url: str, payload: dict[str, object], api_key: str) -> dict[str, object]:
@@ -41,6 +48,7 @@ def _extract_content(payload: dict[str, object]) -> str:
 def generate_context_bound_answer(question: str, context: dict[str, object]) -> dict[str, str] | None:
     user_prompt = (
         f"Question:\n{question}\n\n"
+        "Use only this JSON context. If it does not contain enough evidence, say so.\n\n"
         f"Context JSON:\n{json.dumps(context, default=str)}"
     )
     payload = {
@@ -50,6 +58,7 @@ def generate_context_bound_answer(question: str, context: dict[str, object]) -> 
             {"role": "user", "content": user_prompt},
         ],
         "temperature": 0.1,
+        "max_tokens": 500,
     }
 
     if settings.OPENAI_API_KEY:

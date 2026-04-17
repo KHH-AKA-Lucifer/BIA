@@ -17,6 +17,8 @@ from app.services.databoard_service import (
     location_map,
     machine_rankings,
     filtered_dataframe,
+    operational_dataframe,
+    operational_bounds,
     Period,
     payment_mix,
     recommendations,
@@ -37,31 +39,34 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 @router.get("/summary", response_model=DashboardSummaryResponse)
 def summary(period: Period = "week") -> DashboardSummaryResponse:
-    frame = filtered_dataframe(period)
+    analysis_frame = filtered_dataframe(period)
+    operations_frame = operational_dataframe()
     available_start, available_end = available_range()
-    filtered_start, filtered_end = _period_bounds(period)
+    analysis_start, analysis_end = _period_bounds(period)
+    operational_start, operational_end = operational_bounds()
 
     return DashboardSummaryResponse(
         period=period,
         available_range=date_range_payload(available_start, available_end),
-        filtered_range=date_range_payload(filtered_start, filtered_end),
-        kpis=kpis(frame),
-        revenue_series=revenue_series(period, frame),
-        hourly_demand=hourly_demand(frame),
-        weekday_demand=weekday_demand(frame),
-        payment_mix=payment_mix(frame),
-        status_summary=status_summary(frame),
-        utilization_bands=utilization_bands(frame),
-        location_rankings=location_rankings(frame),
-        location_map=location_map(frame),
-        category_rankings=category_rankings(frame),
-        subcategory_rankings=subcategory_rankings(frame),
-        product_rankings=product_rankings(frame),
-        machine_rankings=machine_rankings(frame),
-        category_location_matrix=category_location_matrix(frame),
-        restock_priority=restock_priority(frame, DF),
-        action_items=action_items(frame, DF),
-        recommendations=recommendations(frame, DF),
+        analysis_range=date_range_payload(analysis_start, analysis_end),
+        operational_range=date_range_payload(operational_start, operational_end),
+        kpis=kpis(analysis_frame, operational_frame=operations_frame),
+        revenue_series=revenue_series(period, analysis_frame),
+        hourly_demand=hourly_demand(analysis_frame),
+        weekday_demand=weekday_demand(analysis_frame),
+        payment_mix=payment_mix(analysis_frame),
+        status_summary=status_summary(operations_frame),
+        utilization_bands=utilization_bands(operations_frame),
+        location_rankings=location_rankings(analysis_frame),
+        location_map=location_map(analysis_frame),
+        category_rankings=category_rankings(analysis_frame),
+        subcategory_rankings=subcategory_rankings(analysis_frame),
+        product_rankings=product_rankings(analysis_frame),
+        machine_rankings=machine_rankings(operations_frame),
+        category_location_matrix=category_location_matrix(analysis_frame),
+        restock_priority=restock_priority(operations_frame, DF),
+        action_items=action_items(operations_frame, DF),
+        recommendations=recommendations(operations_frame, DF),
         forecast_summary=forecast_summary(DF),
     )
 

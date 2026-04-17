@@ -4,6 +4,8 @@ import sys
 import unittest
 from pathlib import Path
 
+import pandas as pd
+
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = BACKEND_ROOT.parent
@@ -23,6 +25,8 @@ from app.services.databoard_service import (
     hourly_demand,
     kpis,
     location_rankings,
+    operational_bounds,
+    operational_dataframe,
     product_rankings,
     subcategory_rankings,
     weekday_demand,
@@ -45,16 +49,27 @@ class DashboardSummaryTests(unittest.TestCase):
         self.assertIn("Subcategory", DF.columns)
         self.assertNotIn("Unknown", set(DF["Category"].unique()))
 
-    def test_year_period_uses_full_available_history(self) -> None:
+    def test_year_period_uses_trailing_365_day_window(self) -> None:
         available_start, available_end = available_range()
         year_start, year_end = _period_bounds("year")
 
-        self.assertEqual(year_start.normalize(), available_start.normalize())
         self.assertEqual(year_end.normalize(), available_end.normalize())
+        expected_start = max(available_end.normalize() - pd.Timedelta(days=364), available_start.normalize())
+        self.assertEqual(year_start.normalize(), expected_start.normalize())
+
+    def test_operational_snapshot_is_latest_7_days(self) -> None:
+        available_start, available_end = available_range()
+        operational_start, operational_end = operational_bounds()
+        frame = operational_dataframe()
+
+        self.assertEqual(operational_end.normalize(), available_end.normalize())
+        expected_start = max(available_end.normalize() - pd.Timedelta(days=6), available_start.normalize())
+        self.assertEqual(operational_start.normalize(), expected_start.normalize())
+        self.assertFalse(frame.empty)
 
     def test_top_kpis_match_rankings(self) -> None:
         frame = filtered_dataframe("year")
-        summary_kpis = kpis(frame)
+        summary_kpis = kpis(frame, operational_frame=operational_dataframe())
         locations = location_rankings(frame)
         categories = category_rankings(frame)
         subcategories = subcategory_rankings(frame)
@@ -101,7 +116,8 @@ class DashboardSummaryTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(body["period"], "year")
         self.assertEqual(body["available_range"]["end"], "2026-04-15")
-        self.assertEqual(body["filtered_range"]["start"], body["available_range"]["start"])
+        self.assertEqual(body["analysis_range"]["end"], body["available_range"]["end"])
+        self.assertEqual(body["operational_range"]["end"], body["available_range"]["end"])
         self.assertEqual(body["kpis"]["top_location"]["name"], body["location_rankings"][0]["name"])
         self.assertEqual(body["kpis"]["top_category"]["name"], body["category_rankings"][0]["name"])
         self.assertEqual(body["kpis"]["top_subcategory"]["name"], body["subcategory_rankings"][0]["name"])
@@ -146,6 +162,67 @@ class DashboardSummaryTests(unittest.TestCase):
         self.assertEqual(body["mode"], "local_model")
         self.assertEqual(body["structured_data"]["scope"], "network")
         self.assertGreater(body["structured_data"]["next_7d_revenue"], 0)
+
+    def test_chat_endpoint_handles_natural_best_selling_product_question(self) -> None:
+        response = self.client.post(
+            "/api/v1/dashboard/chat",
+            json={"message": "what is the best selling product of last 7 days ?", "period": "month"},
+        )
+        body = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(body["route"], "highest_selling_product")
+        self.assertEqual(body["mode"], "local_analytics")
+        self.assertEqual(body["data_scope"], "last_7_days")
+        self.assertEqual(body["structured_data"]["metric"], "units")
+        self.assertGreater(body["structured_data"]["units"], 0)
+
+    def test_chat_endpoint_handles_natural_best_performing_location_question(self) -> None:
+        response = self.client.post(
+            "/api/v1/dashboard/chat",
+            json={"message": "what is the best performing location in last 24 hours ?", "period": "month"},
+        )
+        body = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(body["route"], "highest_performing_location")
+        self.assertEqual(body["mode"], "local_analytics")
+        self.assertEqual(body["data_scope"], "last_24_hours")
+        self.assertEqual(body["structured_data"]["metric"], "revenue")
+        self.assertGreater(body["structured_data"]["revenue"], 0)
+
+    def test_chat_endpoint_handles_typo_and_no_space_variants(self) -> None:
+        response = self.client.post(
+            "/api/v1/dashboard/chat",
+            json={"message": "which machine needs assitance now", "period": "month"},
+        )
+        body = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(body["route"], "risk_classification")
+        self.assertEqual(body["mode"], "local_model")
+
+        response = self.client.post(
+            "/api/v1/dashboard/chat",
+            json={"message": "bestselling product last7days", "period": "month"},
+        )
+        body = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(body["route"], "highest_selling_product")
+        self.assertEqual(body["data_scope"], "last_7_days")
+
+    def test_chat_endpoint_handles_compare_categories_request(self) -> None:
+        response = self.client.post(
+            "/api/v1/dashboard/chat",
+            json={"message": "compare top categories this month", "period": "month"},
+        )
+        body = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(body["route"], "compare_category_rankings")
+        self.assertEqual(body["mode"], "local_analytics")
+        self.assertTrue(body["structured_data"])
 
 
 if __name__ == "__main__":

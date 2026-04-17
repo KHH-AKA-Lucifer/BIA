@@ -73,12 +73,25 @@ def _period_bounds(period: Period) -> tuple[pd.Timestamp, pd.Timestamp]:
     elif period == "quarter":
         start = end - pd.Timedelta(days=89)
     else:
-        start = available_start.normalize()
+        start = end - pd.Timedelta(days=364)
+    start = max(start, available_start.normalize())
+    return start, end
+
+
+def operational_bounds() -> tuple[pd.Timestamp, pd.Timestamp]:
+    available_start, available_end = available_range()
+    end = available_end.normalize()
+    start = max(end - pd.Timedelta(days=6), available_start.normalize())
     return start, end
 
 
 def filtered_dataframe(period: Period) -> pd.DataFrame:
     start, end = _period_bounds(period)
+    return DATE_INDEXED_DF.loc[start : end + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)].reset_index()
+
+
+def operational_dataframe() -> pd.DataFrame:
+    start, end = operational_bounds()
     return DATE_INDEXED_DF.loc[start : end + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)].reset_index()
 
 
@@ -531,7 +544,7 @@ def recommendations(frame: pd.DataFrame, full_frame: pd.DataFrame) -> list[dict[
     return [{"title": item["title"], "detail": item["detail"]} for item in action_items(frame, full_frame)]
 
 
-def kpis(frame: pd.DataFrame) -> dict[str, object]:
+def kpis(frame: pd.DataFrame, operational_frame: pd.DataFrame | None = None) -> dict[str, object]:
     total_revenue = float(frame["LineTotal"].sum())
     total_transactions = int(frame["Transaction"].count())
     total_machines = int(frame["Device ID"].nunique())
@@ -541,7 +554,7 @@ def kpis(frame: pd.DataFrame) -> dict[str, object]:
     category_grouped = frame.groupby("Category")["LineTotal"].sum().sort_values(ascending=False)
     subcategory_grouped = frame.groupby("Subcategory")["LineTotal"].sum().sort_values(ascending=False)
     product_grouped = frame.groupby("Product")["LineTotal"].sum().sort_values(ascending=False)
-    status = status_summary(frame)
+    status = status_summary(operational_frame if operational_frame is not None else frame)
 
     return {
         "total_revenue": round(total_revenue, 2),

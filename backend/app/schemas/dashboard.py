@@ -161,7 +161,8 @@ class ForecastSummaryResponse(BaseModel):
 class DashboardSummaryResponse(BaseModel):
     period: str
     available_range: DateRangeResponse
-    filtered_range: DateRangeResponse
+    analysis_range: DateRangeResponse
+    operational_range: DateRangeResponse
     kpis: KPIResponse
     revenue_series: list[TimeSeriesPointResponse]
     hourly_demand: list[HourlyDemandPointResponse]
