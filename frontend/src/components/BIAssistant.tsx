@@ -2,7 +2,7 @@ import React from 'react'
 import dashboardService from '../services/dashboard.service'
 import type { DashboardPeriod } from '../types/dashboard.types'
 import type { ChatResponse, ModelCard } from '../types/assistant.types'
-import { Bot, SendHorizontal, Sparkles } from 'lucide-react'
+import { Bot, ChevronDown, MessageSquareText, SendHorizontal, Wrench, X } from 'lucide-react'
 
 interface BIAssistantProps {
   period: DashboardPeriod
@@ -14,19 +14,43 @@ interface ConversationItem {
   meta?: ChatResponse | null
 }
 
+type AssistantView = 'chat' | 'models'
+
 const EXAMPLE_PROMPTS = [
   'Predict next 7 days revenue for Plainsview Market Synth 69',
   'Which machines are highest risk right now?',
   'What trained models are available?',
   'Cluster locations and explain the segments',
 ]
+const launcherStyle: React.CSSProperties = {
+  position: 'fixed',
+  right: '24px',
+  bottom: '24px',
+  zIndex: 120,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '10px',
+  padding: '16px 18px',
+  borderRadius: '999px',
+  border: '1px solid #1D4ED8',
+  background: 'linear-gradient(135deg, #1D4ED8 0%, #0F766E 100%)',
+  color: '#FFFFFF',
+  boxShadow: '0 20px 50px rgba(15, 23, 42, 0.24)',
+  cursor: 'pointer',
+}
 
-const cardStyle: React.CSSProperties = {
+const shellStyle: React.CSSProperties = {
+  position: 'fixed',
+  right: '24px',
+  bottom: '24px',
+  zIndex: 120,
+  width: 'min(430px, calc(100vw - 24px))',
+  maxWidth: 'calc(100vw - 24px)',
   background: '#FFFFFF',
-  borderRadius: '24px',
+  borderRadius: '28px',
   border: '1px solid #DCE5EF',
-  padding: '24px',
-  boxShadow: '0 14px 36px rgba(15, 23, 42, 0.07)',
+  boxShadow: '0 24px 70px rgba(15, 23, 42, 0.2)',
+  overflow: 'hidden',
 }
 
 const metaChip = (label: string, value: string | null | undefined) => {
@@ -37,12 +61,12 @@ const metaChip = (label: string, value: string | null | undefined) => {
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        padding: '6px 10px',
+        padding: '5px 9px',
         borderRadius: '999px',
         background: '#EFF6FF',
         border: '1px solid #BFDBFE',
         color: '#1D4ED8',
-        fontSize: '12px',
+        fontSize: '11px',
         fontWeight: 700,
       }}
     >
@@ -56,13 +80,16 @@ const BIAssistant: React.FC<BIAssistantProps> = ({ period }) => {
   const [loadingModels, setLoadingModels] = React.useState(true)
   const [message, setMessage] = React.useState('')
   const [submitting, setSubmitting] = React.useState(false)
+  const [open, setOpen] = React.useState(false)
+  const [view, setView] = React.useState<AssistantView>('chat')
   const [conversation, setConversation] = React.useState<ConversationItem[]>([
     {
       role: 'assistant',
-      content: 'Ask a forecasting, risk, segmentation, or descriptive question. I will use local trained models first and only use an external LLM fallback if it is configured.',
+      content: 'Ask about forecasts, risk, clustering, or top performers. I use trained local models first and only fall back to external LLMs when needed.',
       meta: null,
     },
   ])
+  const conversationEndRef = React.useRef<HTMLDivElement | null>(null)
 
   React.useEffect(() => {
     let ignore = false
@@ -83,9 +110,15 @@ const BIAssistant: React.FC<BIAssistantProps> = ({ period }) => {
     }
   }, [])
 
+  React.useEffect(() => {
+    conversationEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [conversation, open, view])
+
   const sendMessage = async (prompt: string) => {
     const trimmed = prompt.trim()
     if (!trimmed) return
+    setOpen(true)
+    setView('chat')
     setConversation((current) => [...current, { role: 'user', content: trimmed }])
     setMessage('')
     setSubmitting(true)
@@ -106,160 +139,300 @@ const BIAssistant: React.FC<BIAssistantProps> = ({ period }) => {
     }
   }
 
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(320px, 0.95fr)', gap: '20px' }}>
-      <section style={cardStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '18px', flexWrap: 'wrap' }}>
-          <div>
-            <h2 style={{ fontSize: '24px', lineHeight: 1.15, fontWeight: 900, color: '#0F172A', margin: 0 }}>BI Assistant</h2>
-            <p style={{ fontSize: '14px', color: '#475569', margin: '8px 0 0 0', lineHeight: 1.6 }}>
-              This chat routes to trained forecasting, classification, and clustering models before considering any external LLM fallback.
-            </p>
-          </div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '14px', background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#334155' }}>
-            <Sparkles size={16} color="#1D4ED8" />
-            Period: <strong style={{ textTransform: 'capitalize' }}>{period}</strong>
-          </div>
-        </div>
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} style={launcherStyle}>
+        <Bot size={20} />
+        <span style={{ fontSize: '14px', fontWeight: 800 }}>Ask BI Assistant</span>
+      </button>
+    )
+  }
 
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '18px' }}>
-          {EXAMPLE_PROMPTS.map((prompt) => (
+  return (
+    <div style={shellStyle}>
+      <div
+        style={{
+          padding: '16px 18px',
+          background: 'linear-gradient(135deg, #0F172A 0%, #1E3A8A 55%, #0F766E 100%)',
+          color: '#FFFFFF',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '14px',
+                  background: 'rgba(255, 255, 255, 0.16)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Bot size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: '18px', fontWeight: 900 }}>BI Assistant</div>
+                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.78)' }}>Trained models, guarded fallback, dashboard-aware answers</div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px' }}>
             <button
-              key={prompt}
-              onClick={() => sendMessage(prompt)}
+              onClick={() => setOpen(false)}
               style={{
-                padding: '10px 12px',
-                borderRadius: '14px',
-                border: '1px solid #DCE5EF',
-                background: '#FFFFFF',
-                color: '#334155',
-                fontWeight: 700,
+                width: '34px',
+                height: '34px',
+                borderRadius: '12px',
+                border: '1px solid rgba(255,255,255,0.18)',
+                background: 'rgba(255,255,255,0.12)',
+                color: '#FFFFFF',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 cursor: 'pointer',
               }}
             >
-              {prompt}
+              <ChevronDown size={16} />
             </button>
-          ))}
-        </div>
-
-        <div style={{ display: 'grid', gap: '14px', maxHeight: '520px', overflowY: 'auto', paddingRight: '4px', marginBottom: '16px' }}>
-          {conversation.map((item, index) => (
-            <article
-              key={`${item.role}-${index}`}
+            <button
+              onClick={() => setOpen(false)}
               style={{
-                padding: '16px 18px',
-                borderRadius: '18px',
-                background: item.role === 'assistant' ? '#F8FAFC' : '#EFF6FF',
-                border: `1px solid ${item.role === 'assistant' ? '#E2E8F0' : '#BFDBFE'}`,
+                width: '34px',
+                height: '34px',
+                borderRadius: '12px',
+                border: '1px solid rgba(255,255,255,0.18)',
+                background: 'rgba(255,255,255,0.12)',
+                color: '#FFFFFF',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                <div
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: item.role === 'assistant' ? '#DBEAFE' : '#CFFAFE',
-                    color: '#1D4ED8',
-                  }}
-                >
-                  {item.role === 'assistant' ? <Bot size={16} /> : <span style={{ fontWeight: 800 }}>You</span>}
-                </div>
-                <strong style={{ color: '#0F172A' }}>{item.role === 'assistant' ? 'Assistant' : 'You'}</strong>
-              </div>
-              <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.65, color: '#334155' }}>{item.content}</p>
-              {item.meta ? (
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
-                  {metaChip('Mode', item.meta.mode)}
-                  {metaChip('Route', item.meta.route)}
-                  {metaChip('Model', item.meta.model_name ?? null)}
-                  {metaChip('Type', item.meta.model_type ?? null)}
-                  {metaChip('Scope', item.meta.data_scope ?? null)}
-                  {metaChip('Confidence', item.meta.confidence ?? null)}
-                </div>
-              ) : null}
-            </article>
-          ))}
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'center' }}>
-          <textarea
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            rows={3}
-            placeholder="Ask about forecasts, risk, top performers, or location segments..."
-            style={{
-              width: '100%',
-              borderRadius: '16px',
-              border: '1px solid #CBD5E1',
-              padding: '14px 16px',
-              resize: 'vertical',
-              outline: 'none',
-            }}
-          />
+        <div style={{ display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
           <button
-            onClick={() => sendMessage(message)}
-            disabled={submitting}
+            onClick={() => setView('chat')}
             style={{
-              alignSelf: 'stretch',
-              minWidth: '64px',
-              borderRadius: '16px',
-              border: '1px solid #1D4ED8',
-              background: '#1D4ED8',
-              color: '#FFFFFF',
-              cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
-              justifyContent: 'center',
+              gap: '8px',
+              padding: '10px 12px',
+              borderRadius: '999px',
+              border: '1px solid rgba(255,255,255,0.18)',
+              background: view === 'chat' ? '#FFFFFF' : 'rgba(255,255,255,0.12)',
+              color: view === 'chat' ? '#0F172A' : '#FFFFFF',
+              fontWeight: 800,
+              cursor: 'pointer',
             }}
           >
-            <SendHorizontal size={18} />
+            <MessageSquareText size={15} />
+            Chat
           </button>
+          <button
+            onClick={() => setView('models')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 12px',
+              borderRadius: '999px',
+              border: '1px solid rgba(255,255,255,0.18)',
+              background: view === 'models' ? '#FFFFFF' : 'rgba(255,255,255,0.12)',
+              color: view === 'models' ? '#0F172A' : '#FFFFFF',
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+          >
+            <Wrench size={15} />
+            Models
+          </button>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '10px 12px',
+              borderRadius: '999px',
+              background: 'rgba(255,255,255,0.12)',
+              color: '#FFFFFF',
+              fontSize: '12px',
+              fontWeight: 800,
+              textTransform: 'capitalize',
+            }}
+          >
+            Dashboard period: {period}
+          </div>
         </div>
-      </section>
+      </div>
 
-      <section style={cardStyle}>
-        <h2 style={{ fontSize: '24px', lineHeight: 1.15, fontWeight: 900, color: '#0F172A', margin: 0 }}>Model Registry</h2>
-        <p style={{ fontSize: '14px', color: '#475569', margin: '8px 0 16px 0', lineHeight: 1.6 }}>
-          The assistant can only claim predictive modeling when a trained local model exists here.
-        </p>
-
-        {loadingModels ? (
-          <div style={{ color: '#475569', fontSize: '14px' }}>Loading model metadata...</div>
-        ) : (
-          <div style={{ display: 'grid', gap: '12px', maxHeight: '640px', overflowY: 'auto', paddingRight: '4px' }}>
-            {models.map((model) => (
-              <article key={model.model_name} style={{ padding: '16px', borderRadius: '18px', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start' }}>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '17px', color: '#0F172A' }}>{model.model_name}</h3>
-                    <div style={{ marginTop: '6px', fontSize: '13px', color: '#475569' }}>
-                      {model.model_type} | {model.task_type} | {model.scope}
-                    </div>
-                  </div>
-                  <div style={{ padding: '6px 10px', borderRadius: '999px', background: '#ECFDF3', color: '#166534', fontSize: '12px', fontWeight: 800 }}>
-                    trained
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gap: '6px', marginTop: '12px' }}>
-                  {Object.entries(model.metrics || {}).map(([key, value]) => (
-                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '13px', color: '#334155' }}>
-                      <span>{key}</span>
-                      <strong>{String(value)}</strong>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ marginTop: '10px', fontSize: '12px', color: '#64748B' }}>
-                  Trained at: {new Date(model.trained_at).toLocaleString()}
-                </div>
-              </article>
+      {view === 'chat' ? (
+        <div style={{ padding: '16px', background: '#F8FBFF' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
+            {EXAMPLE_PROMPTS.map((prompt) => (
+              <button
+                key={prompt}
+                onClick={() => sendMessage(prompt)}
+                style={{
+                  padding: '9px 11px',
+                  borderRadius: '12px',
+                  border: '1px solid #DCE5EF',
+                  background: '#FFFFFF',
+                  color: '#334155',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                {prompt}
+              </button>
             ))}
           </div>
-        )}
-      </section>
+
+          <div
+            style={{
+              display: 'grid',
+              gap: '12px',
+              height: '360px',
+              overflowY: 'auto',
+              padding: '2px 4px 2px 0',
+              marginBottom: '14px',
+            }}
+          >
+            {conversation.map((item, index) => (
+              <article
+                key={`${item.role}-${index}`}
+                style={{
+                  justifySelf: item.role === 'assistant' ? 'start' : 'end',
+                  maxWidth: '88%',
+                  padding: '14px 16px',
+                  borderRadius: item.role === 'assistant' ? '18px 18px 18px 6px' : '18px 18px 6px 18px',
+                  background: item.role === 'assistant' ? '#FFFFFF' : 'linear-gradient(135deg, #DBEAFE 0%, #CFFAFE 100%)',
+                  border: `1px solid ${item.role === 'assistant' ? '#E2E8F0' : '#BFDBFE'}`,
+                  boxShadow: '0 8px 20px rgba(15, 23, 42, 0.04)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <div
+                    style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '50%',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: item.role === 'assistant' ? '#DBEAFE' : '#FFFFFF',
+                      color: '#1D4ED8',
+                    }}
+                  >
+                    {item.role === 'assistant' ? <Bot size={14} /> : <span style={{ fontWeight: 900, fontSize: '12px' }}>You</span>}
+                  </div>
+                  <strong style={{ color: '#0F172A', fontSize: '13px' }}>{item.role === 'assistant' ? 'Assistant' : 'You'}</strong>
+                </div>
+                <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.6, color: '#334155', whiteSpace: 'pre-wrap' }}>{item.content}</p>
+                {item.meta ? (
+                  <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap', marginTop: '10px' }}>
+                    {metaChip('Mode', item.meta.mode)}
+                    {metaChip('Route', item.meta.route)}
+                    {metaChip('Model', item.meta.model_name ?? null)}
+                    {metaChip('Type', item.meta.model_type ?? null)}
+                    {metaChip('Scope', item.meta.data_scope ?? null)}
+                  </div>
+                ) : null}
+              </article>
+            ))}
+            <div ref={conversationEndRef} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '10px', alignItems: 'end' }}>
+            <textarea
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              rows={3}
+              placeholder="Ask about revenue forecasts, risk, top products, or location segments..."
+              style={{
+                width: '100%',
+                borderRadius: '18px',
+                border: '1px solid #CBD5E1',
+                background: '#FFFFFF',
+                padding: '14px 16px',
+                resize: 'none',
+                outline: 'none',
+                fontFamily: 'inherit',
+                fontSize: '14px',
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault()
+                  void sendMessage(message)
+                }
+              }}
+            />
+            <button
+              onClick={() => sendMessage(message)}
+              disabled={submitting}
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '18px',
+                border: '1px solid #1D4ED8',
+                background: submitting ? '#93C5FD' : '#1D4ED8',
+                color: '#FFFFFF',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 12px 24px rgba(29, 78, 216, 0.22)',
+              }}
+            >
+              <SendHorizontal size={18} />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ padding: '16px', background: '#F8FBFF' }}>
+          <div style={{ fontSize: '13px', color: '#475569', marginBottom: '12px', lineHeight: 1.6 }}>
+            These are the local models the assistant can use before any fallback call.
+          </div>
+          {loadingModels ? (
+            <div style={{ color: '#475569', fontSize: '14px' }}>Loading model metadata...</div>
+          ) : (
+            <div style={{ display: 'grid', gap: '10px', maxHeight: '430px', overflowY: 'auto', paddingRight: '4px' }}>
+              {models.map((model) => (
+                <article key={model.model_name} style={{ padding: '14px', borderRadius: '18px', background: '#FFFFFF', border: '1px solid #E2E8F0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'flex-start' }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '15px', color: '#0F172A' }}>{model.model_name}</h3>
+                      <div style={{ marginTop: '4px', fontSize: '12px', color: '#475569' }}>
+                        {model.model_type} | {model.task_type} | {model.scope}
+                      </div>
+                    </div>
+                    <div style={{ padding: '5px 9px', borderRadius: '999px', background: '#ECFDF3', color: '#166534', fontSize: '11px', fontWeight: 800 }}>
+                      trained
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gap: '5px', marginTop: '10px' }}>
+                    {Object.entries(model.metrics || {}).slice(0, 4).map(([key, value]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', fontSize: '12px', color: '#334155' }}>
+                        <span>{key}</span>
+                        <strong>{String(value)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

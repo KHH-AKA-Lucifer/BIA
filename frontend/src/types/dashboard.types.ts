@@ -162,7 +162,8 @@ export interface ForecastSummary {
 export interface DashboardSummary {
   period: DashboardPeriod
   available_range: DateRangeSummary
-  filtered_range: DateRangeSummary
+  analysis_range: DateRangeSummary
+  operational_range: DateRangeSummary
   kpis: DashboardKPIs
   revenue_series: RevenuePoint[]
   hourly_demand: HourlyDemandPoint[]

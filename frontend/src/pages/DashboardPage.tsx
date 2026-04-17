@@ -210,13 +210,13 @@ const DashboardPage: React.FC = () => {
         <KPICard eyebrow="Category" title="Highest profit category" value={data!.kpis.top_category.name} supporting={`${currency(data!.kpis.top_category.revenue)} | ${percent(data!.kpis.top_category.share)} share`} icon="category" tone="neutral" />
         <KPICard eyebrow="Subcategory" title="Highest profit subcategory" value={data!.kpis.top_subcategory.name} supporting={`${currency(data!.kpis.top_subcategory.revenue)} | ${percent(data!.kpis.top_subcategory.share)} share`} icon="category" tone="neutral" />
         <KPICard eyebrow="Product" title="Highest profit product" value={data!.kpis.top_product.name} supporting={`${currency(data!.kpis.top_product.revenue)} | ${percent(data!.kpis.top_product.share)} share`} icon="product" tone="positive" />
-        <KPICard eyebrow="Attention" title="Machines needing attention" value={String(data!.kpis.attention_machines)} supporting="Critical machines require route action first." icon="attention" tone="warning" />
+        <KPICard eyebrow="Attention" title="Machines needing attention now" value={String(data!.kpis.attention_machines)} supporting={`Based on the operational snapshot from ${data!.operational_range.start} to ${data!.operational_range.end}.`} icon="attention" tone="warning" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.75fr) minmax(320px, 0.95fr)', gap: '20px', marginBottom: '24px' }}>
         <SectionCard
           title="How has revenue moved over the selected period?"
-          subtitle="The main performance trend uses the actual selected time window. Weekly view shows days, monthly view shows weeks, and quarter/year views roll up by month."
+          subtitle="The main performance trend uses a consistent rolling window: week = last 7 days, month = last 30 days, quarter = last 90 days, year = last 365 days."
         >
           <div style={{ height: '380px' }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -239,7 +239,7 @@ const DashboardPage: React.FC = () => {
 
         <SectionCard
           title="Executive action board"
-          subtitle="These actions are generated from route risk, location underperformance, and the strongest product demand pattern in the selected data."
+          subtitle={`These actions come from the current operational snapshot (${data!.operational_range.start} to ${data!.operational_range.end}), not the selected analytical period.`}
           actions={<Sparkles size={18} color="#1D4ED8" />}
         >
           <div style={{ display: 'grid', gap: '14px' }}>
@@ -524,7 +524,7 @@ const DashboardPage: React.FC = () => {
   const renderOperationsTab = () => (
     <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '24px' }}>
-        <SectionCard title="How healthy is the machine fleet?" subtitle="This distribution is the quickest operational check before drilling into individual machine tables.">
+        <SectionCard title="How healthy is the machine fleet now?" subtitle={`This operational distribution is based on the latest 7-day snapshot (${data!.operational_range.start} to ${data!.operational_range.end}).`}>
           <div style={{ height: '320px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -538,7 +538,7 @@ const DashboardPage: React.FC = () => {
           </div>
         </SectionCard>
 
-        <SectionCard title="How is utilization distributed?" subtitle="Utilization bands separate severe underperformance from normal operational variation.">
+        <SectionCard title="How is utilization distributed now?" subtitle="Utilization bands use the current operational snapshot, not the selected analytical period.">
           <div style={{ height: '320px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data!.utilization_bands} margin={{ top: 8, right: 18, left: 8, bottom: 8 }}>
@@ -554,7 +554,7 @@ const DashboardPage: React.FC = () => {
           </div>
         </SectionCard>
 
-        <SectionCard title="Which machines are highest risk?" subtitle="Risk combines low utilization, negative trend, and short-term forecast pressure.">
+        <SectionCard title="Which machines are highest risk now?" subtitle="Risk combines low utilization, negative trend, and short-term forecast pressure from the current snapshot.">
           <div style={{ height: '320px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={riskBars} layout="vertical" margin={{ top: 8, right: 18, left: 70, bottom: 8 }}>
@@ -571,7 +571,7 @@ const DashboardPage: React.FC = () => {
         </SectionCard>
       </div>
 
-      <SectionCard title="Which machines generate the most revenue?" subtitle="Machine-level ranking is a required BI layer, not an optional appendix. Revenue, utilization, trend, and status are visible together.">
+      <SectionCard title="Which machines are strongest right now?" subtitle={`This machine ranking uses the current operational snapshot (${data!.operational_range.start} to ${data!.operational_range.end}).`}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -617,7 +617,7 @@ const DashboardPage: React.FC = () => {
 
       <div style={{ height: '20px' }} />
 
-      <SectionCard title="Which machines need attention now?" subtitle="This table is the operational handoff for the route team. It uses actual risk scoring, not placeholder text.">
+      <SectionCard title="Which machines need attention now?" subtitle={`This route handoff is based on the operational snapshot from ${data!.operational_range.start} to ${data!.operational_range.end}.`}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -664,15 +664,11 @@ const DashboardPage: React.FC = () => {
         <MetricChip label="Highest Profit Place" value={data!.kpis.top_location.name} tone="success" />
         <MetricChip label="Highest Profit Category" value={data!.kpis.top_category.name} tone="neutral" />
         <MetricChip label="Highest Profit Product" value={data!.kpis.top_product.name} tone="neutral" />
-        <MetricChip label="Machines Needing Attention" value={String(data!.kpis.attention_machines)} tone="warning" />
-      </div>
-
-      <div style={{ marginBottom: '24px' }}>
-        <BIAssistant period={period} />
+        <MetricChip label="Machines Needing Attention Now" value={String(data!.kpis.attention_machines)} tone="warning" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(320px, 0.9fr)', gap: '20px', marginBottom: '24px' }}>
-        <SectionCard title="What does the recent revenue profile look like before modeling?" subtitle="This keeps the predictive conversation grounded in the actual revenue trajectory behind the trained models.">
+        <SectionCard title="What does the recent revenue profile look like before modeling?" subtitle={`This chart uses the selected analysis window (${data!.analysis_range.start} to ${data!.analysis_range.end}) before any predictive step.`}>
           <div style={{ height: '360px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data!.revenue_series} margin={{ top: 8, right: 18, left: 8, bottom: 8 }}>
@@ -692,7 +688,7 @@ const DashboardPage: React.FC = () => {
           </div>
         </SectionCard>
 
-        <SectionCard title="Which actions deserve management attention?" subtitle="These recommendations come from the live operational dataset and complement the trained risk and forecasting models in the assistant panel.">
+        <SectionCard title="Which actions deserve management attention?" subtitle={`These recommendations come from the operational snapshot (${data!.operational_range.start} to ${data!.operational_range.end}) and complement the trained models in the assistant panel.`}>
           <div style={{ display: 'grid', gap: '14px' }}>
             {data!.action_items.map((item) => (
               <article key={item.title} style={{ padding: '18px', borderRadius: '18px', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
@@ -786,7 +782,7 @@ const DashboardPage: React.FC = () => {
               </h1>
               <div style={{ fontSize: '15px', color: '#475569', lineHeight: 1.6 }}>
                 {data
-                  ? `Synthetic U.S.-style vending benchmark data from ${data.available_range.start} to ${data.available_range.end}. Showing ${data.filtered_range.start} to ${data.filtered_range.end}.`
+                  ? `Synthetic U.S.-style vending benchmark data from ${data.available_range.start} to ${data.available_range.end}. Analysis window: ${data.analysis_range.start} to ${data.analysis_range.end}. Operations snapshot: ${data.operational_range.start} to ${data.operational_range.end}.`
                   : 'Loading dashboard context...'}
               </div>
             </div>
@@ -865,8 +861,8 @@ const DashboardPage: React.FC = () => {
       <main style={{ maxWidth: '1540px', margin: '0 auto', padding: '26px 24px 40px 24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '18px', marginBottom: '24px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            <MetricChip label="View" value={TABS.find((tab) => tab.id === activeTab)?.label ?? 'Executive'} />
-            <MetricChip label="Showing" value={data ? `${data.filtered_range.start} to ${data.filtered_range.end}` : 'Loading'} />
+            <MetricChip label="Analysis Window" value={data ? `${data.analysis_range.start} to ${data.analysis_range.end}` : 'Loading'} />
+            <MetricChip label="Operations Snapshot" value={data ? `${data.operational_range.start} to ${data.operational_range.end}` : 'Loading'} tone="warning" />
           </div>
         </div>
 
@@ -878,6 +874,7 @@ const DashboardPage: React.FC = () => {
           renderActiveTab()
         )}
       </main>
+      <BIAssistant period={period} />
     </div>
   )
 }
