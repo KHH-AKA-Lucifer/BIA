@@ -1,4 +1,16 @@
 export type DashboardPeriod = 'week' | 'month' | 'quarter' | 'year'
+export type DashboardFilterKey = 'location' | 'category' | 'subcategory' | 'product' | 'machine_id' | 'weekday_index' | 'hour' | 'payment_type'
+
+export interface DashboardFilters {
+  location?: string
+  category?: string
+  subcategory?: string
+  product?: string
+  machine_id?: string
+  weekday_index?: number
+  hour?: number
+  payment_type?: string
+}
 
 export type DashboardTab = 'executive' | 'products' | 'locations' | 'operations' | 'forecast'
 
@@ -107,6 +119,58 @@ export interface ProductRanking {
   units: number
 }
 
+export interface CategorySubcategorySlice {
+  subcategory: string
+  revenue: number
+  share_of_category: number
+  transactions: number
+  units: number
+}
+
+export interface CategorySubcategoryContribution {
+  category: string
+  total_revenue: number
+  share_of_total: number
+  subcategory_count: number
+  lead_subcategory: string
+  lead_share_of_category: number
+  subcategories: CategorySubcategorySlice[]
+}
+
+export interface CategoryProductDriver {
+  product: string
+  subcategory: string
+  revenue: number
+  share_of_category: number
+  share_of_total: number
+  transactions: number
+  units: number
+  global_product_rank: number
+}
+
+export interface CategoryProductBridge {
+  category: string
+  total_revenue: number
+  share_of_total: number
+  product_count: number
+  top_product: string
+  top_product_revenue: number
+  top_product_share_of_category: number
+  products_in_global_top: number
+  drivers: CategoryProductDriver[]
+}
+
+export interface ProductHierarchyRow {
+  category: string
+  subcategory: string
+  product: string
+  revenue: number
+  transactions: number
+  units: number
+  share_of_category: number
+  rank_within_category: number
+}
+
 export interface MachineRanking {
   machine_id: string
   location: string
@@ -176,6 +240,9 @@ export interface DashboardSummary {
   category_rankings: CategoryRanking[]
   subcategory_rankings: SubcategoryRanking[]
   product_rankings: ProductRanking[]
+  category_subcategory_contribution: CategorySubcategoryContribution[]
+  category_product_bridge: CategoryProductBridge[]
+  product_hierarchy_matrix: ProductHierarchyRow[]
   machine_rankings: MachineRanking[]
   category_location_matrix: CategoryLocationRow[]
   restock_priority: RestockPriorityItem[]

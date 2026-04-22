@@ -12,6 +12,7 @@ interface LocationData {
 
 interface LocationMapProps {
   locations: LocationData[]
+  onSelectLocation?: (location: string) => void
 }
 
 const compactCurrency = (value: number) =>
@@ -81,7 +82,7 @@ const FitBoundsComponent: React.FC<{ locations: LocationData[] }> = ({ locations
   return null
 }
 
-export const LocationMap: React.FC<LocationMapProps> = ({ locations }) => {
+export const LocationMap: React.FC<LocationMapProps> = ({ locations, onSelectLocation }) => {
   // Calculate map center (will be overridden by FitBounds)
   const center: L.LatLngExpression = locations.length > 0
     ? [
@@ -111,6 +112,9 @@ export const LocationMap: React.FC<LocationMapProps> = ({ locations }) => {
           key={`loc-${idx}`}
           position={[location.latitude, location.longitude]}
           icon={createCustomIcon(location.revenue, maxRevenue)}
+          eventHandlers={{
+            click: () => onSelectLocation?.(location.location),
+          }}
         >
           <Popup>
             <div style={{ fontSize: '12px', fontWeight: '500', minWidth: '180px' }}>

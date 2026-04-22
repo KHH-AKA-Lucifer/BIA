@@ -28,3 +28,5 @@ class ChatResponse(BaseModel):
     data_scope: str | None = None
     chart_hint: str | None = None
     structured_data: Any = None
+    request_context: dict[str, Any] | None = None
+    evidence: dict[str, Any] | None = None

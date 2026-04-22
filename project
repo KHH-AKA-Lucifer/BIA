@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUN_DIR="$ROOT_DIR/.run"
+BACKEND_PID_FILE="$RUN_DIR/backend.pid"
+FRONTEND_PID_FILE="$RUN_DIR/frontend.pid"
+BACKEND_LOG="$RUN_DIR/backend.log"
+FRONTEND_LOG="$RUN_DIR/frontend.log"
+DB_PORT="${POSTGRES_PORT:-5440}"
+BACKEND_PORT="${BACKEND_PORT:-8000}"
+FRONTEND_PORT="${FRONTEND_PORT:-3000}"
+
+mkdir -p "$RUN_DIR"
+
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+fail() {
+  echo "Error: $*" >&2
+  exit 1
+}
+
+port_listening() {
+  local port="$1"
+  lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+}
+
+pid_running() {
+  local pid_file="$1"
+  [[ -f "$pid_file" ]] || return 1
+  local pid
+  pid="$(cat "$pid_file" 2>/dev/null || true)"
+  [[ -n "$pid" ]] || return 1
+  kill -0 "$pid" >/dev/null 2>&1
+}
+
+cleanup_pid_file() {
+  local pid_file="$1"
+  if [[ -f "$pid_file" ]] && ! pid_running "$pid_file"; then
+    rm -f "$pid_file"
+  fi
+}
+
+wait_for_port() {
+  local port="$1"
+  local label="$2"
+  local retries=30
+  while (( retries > 0 )); do
+    if port_listening "$port"; then
+      echo "$label is ready on port $port."
+      return 0
+    fi
+    sleep 1
+    (( retries -= 1 ))
+  done
+  fail "$label did not start on port $port. Check logs in $RUN_DIR."
+}
+
+ensure_backend_python() {
+  if command_exists python3.11; then
+    echo "python3.11"
+    return 0
+  fi
+  if command_exists python3; then
+    echo "python3"
+    return 0
+  fi
+  fail "Python 3.11+ is required."
+}
+
+start_db() {
+  command_exists docker || fail "Docker is required to start the database."
+  echo "Starting PostgreSQL container..."
+  (cd "$ROOT_DIR" && docker compose up -d db >/dev/null)
+  wait_for_port "$DB_PORT" "PostgreSQL"
+}
+
+start_backend() {
+  cleanup_pid_file "$BACKEND_PID_FILE"
+  if pid_running "$BACKEND_PID_FILE" || port_listening "$BACKEND_PORT"; then
+    echo "Backend already running on http://127.0.0.1:$BACKEND_PORT/"
+    return 0
+  fi
+
+  local python_bin
+  python_bin="$(ensure_backend_python)"
+  echo "Starting backend..."
+  (
+    cd "$ROOT_DIR/backend"
+    nohup "$python_bin" -m uvicorn app.main:app --host 127.0.0.1 --port "$BACKEND_PORT" >"$BACKEND_LOG" 2>&1 &
+    echo $! >"$BACKEND_PID_FILE"
+  )
+  wait_for_port "$BACKEND_PORT" "Backend"
+}
+
+start_frontend() {
+  cleanup_pid_file "$FRONTEND_PID_FILE"
+  if pid_running "$FRONTEND_PID_FILE" || port_listening "$FRONTEND_PORT"; then
+    echo "Frontend already running on http://127.0.0.1:$FRONTEND_PORT/"
+    return 0
+  fi
+
+  command_exists npm || fail "npm is required to start the frontend."
+  echo "Starting frontend..."
+  (
+    cd "$ROOT_DIR/frontend"
+    nohup npm run dev -- --host 127.0.0.1 --port "$FRONTEND_PORT" >"$FRONTEND_LOG" 2>&1 &
+    echo $! >"$FRONTEND_PID_FILE"
+  )
+  wait_for_port "$FRONTEND_PORT" "Frontend"
+}
+
+stop_process() {
+  local pid_file="$1"
+  local label="$2"
+  if pid_running "$pid_file"; then
+    local pid
+    pid="$(cat "$pid_file")"
+    echo "Stopping $label..."
+    kill "$pid" >/dev/null 2>&1 || true
+    rm -f "$pid_file"
+  else
+    rm -f "$pid_file"
+  fi
+}
+
+show_status() {
+  cleanup_pid_file "$BACKEND_PID_FILE"
+  cleanup_pid_file "$FRONTEND_PID_FILE"
+
+  if port_listening "$DB_PORT"; then
+    echo "Database: running on port $DB_PORT"
+  else
+    echo "Database: stopped"
+  fi
+
+  if pid_running "$BACKEND_PID_FILE" || port_listening "$BACKEND_PORT"; then
+    echo "Backend:  running on http://127.0.0.1:$BACKEND_PORT/"
+  else
+    echo "Backend:  stopped"
+  fi
+
+  if pid_running "$FRONTEND_PID_FILE" || port_listening "$FRONTEND_PORT"; then
+    echo "Frontend: running on http://127.0.0.1:$FRONTEND_PORT/"
+  else
+    echo "Frontend: stopped"
+  fi
+}
+
+show_logs() {
+  echo "Backend log:  $BACKEND_LOG"
+  [[ -f "$BACKEND_LOG" ]] && tail -n 20 "$BACKEND_LOG" || echo "No backend log yet."
+  echo
+  echo "Frontend log: $FRONTEND_LOG"
+  [[ -f "$FRONTEND_LOG" ]] && tail -n 20 "$FRONTEND_LOG" || echo "No frontend log yet."
+}
+
+usage() {
+  cat <<EOF
+Usage: ./project <command>
+
+Commands:
+  run      Start database, backend, and frontend
+  stop     Stop backend and frontend started by this script
+  status   Show service status
+  logs     Show recent backend and frontend logs
+EOF
+}
+
+case "${1:-}" in
+  run)
+    start_db
+    start_backend
+    start_frontend
+    echo
+    echo "Project is running:"
+    echo "  Frontend: http://127.0.0.1:$FRONTEND_PORT/"
+    echo "  Backend:  http://127.0.0.1:$BACKEND_PORT/"
+    ;;
+  stop)
+    stop_process "$BACKEND_PID_FILE" "backend"
+    stop_process "$FRONTEND_PID_FILE" "frontend"
+    ;;
+  status)
+    show_status
+    ;;
+  logs)
+    show_logs
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac

@@ -1,11 +1,11 @@
 import apiClient from './api.client'
-import { DashboardPeriod, DashboardSummary } from '../types/dashboard.types'
+import { DashboardFilters, DashboardPeriod, DashboardSummary } from '../types/dashboard.types'
 import { ChatRequest, ChatResponse, ModelCard } from '../types/assistant.types'
 
 class DashboardService {
-  async getSummary(period: DashboardPeriod): Promise<DashboardSummary> {
+  async getSummary(period: DashboardPeriod, filters: DashboardFilters = {}): Promise<DashboardSummary> {
     const response = await apiClient.get<DashboardSummary>('/dashboard/summary', {
-      params: { period },
+      params: { period, ...filters },
     })
     return response.data
   }

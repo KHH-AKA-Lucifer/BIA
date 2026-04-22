@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Literal
+from typing import Literal, TypedDict
 
 import pandas as pd
 
@@ -10,6 +10,17 @@ from app.services.taxonomy import enrich_product_taxonomy
 
 
 Period = Literal["week", "month", "quarter", "year"]
+
+
+class SummaryFilters(TypedDict, total=False):
+    location: str
+    category: str
+    subcategory: str
+    product: str
+    machine_id: str
+    weekday_index: int
+    hour: int
+    payment_type: str
 
 METRO_ANCHORS = (
     (40.7128, -74.0060),
@@ -85,14 +96,40 @@ def operational_bounds() -> tuple[pd.Timestamp, pd.Timestamp]:
     return start, end
 
 
-def filtered_dataframe(period: Period) -> pd.DataFrame:
+def _apply_filters(frame: pd.DataFrame, filters: SummaryFilters | None = None) -> pd.DataFrame:
+    if not filters:
+        return frame
+
+    filtered = frame
+    if filters.get("location"):
+        filtered = filtered[filtered["Location"] == filters["location"]]
+    if filters.get("category"):
+        filtered = filtered[filtered["Category"] == filters["category"]]
+    if filters.get("subcategory"):
+        filtered = filtered[filtered["Subcategory"] == filters["subcategory"]]
+    if filters.get("product"):
+        filtered = filtered[filtered["Product"] == filters["product"]]
+    if filters.get("machine_id"):
+        filtered = filtered[filtered["Device ID"] == filters["machine_id"]]
+    if filters.get("weekday_index") is not None:
+        filtered = filtered[filtered["WeekdayIndex"] == filters["weekday_index"]]
+    if filters.get("hour") is not None:
+        filtered = filtered[filtered["Hour"] == filters["hour"]]
+    if filters.get("payment_type"):
+        filtered = filtered[filtered["Type"] == filters["payment_type"]]
+    return filtered.copy()
+
+
+def filtered_dataframe(period: Period, filters: SummaryFilters | None = None) -> pd.DataFrame:
     start, end = _period_bounds(period)
-    return DATE_INDEXED_DF.loc[start : end + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)].reset_index()
+    frame = DATE_INDEXED_DF.loc[start : end + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)].reset_index()
+    return _apply_filters(frame, filters)
 
 
-def operational_dataframe() -> pd.DataFrame:
+def operational_dataframe(filters: SummaryFilters | None = None) -> pd.DataFrame:
     start, end = operational_bounds()
-    return DATE_INDEXED_DF.loc[start : end + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)].reset_index()
+    frame = DATE_INDEXED_DF.loc[start : end + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)].reset_index()
+    return _apply_filters(frame, filters)
 
 
 def _safe_share(value: float, total: float) -> float:
@@ -300,6 +337,168 @@ def product_rankings(frame: pd.DataFrame) -> list[dict[str, float | int | str]]:
         }
         for (product, category, subcategory), row in grouped.head(25).iterrows()
     ]
+
+
+def category_subcategory_contribution(frame: pd.DataFrame, top_categories: int = 5, top_subcategories: int = 4) -> list[dict[str, object]]:
+    categories = category_rankings(frame)[:top_categories]
+    payload: list[dict[str, object]] = []
+
+    for category_item in categories:
+        category_name = str(category_item["name"])
+        category_frame = frame[frame["Category"] == category_name]
+        total_revenue = float(category_frame["LineTotal"].sum())
+        if category_frame.empty or total_revenue == 0:
+            continue
+
+        subcategory_grouped = (
+            category_frame.groupby("Subcategory")
+            .agg(revenue=("LineTotal", "sum"), transactions=("Transaction", "count"), units=("RQty", "sum"))
+            .sort_values("revenue", ascending=False)
+        )
+
+        top_rows = subcategory_grouped.head(top_subcategories)
+        slices = [
+            {
+                "subcategory": str(subcategory),
+                "revenue": round(float(row.revenue), 2),
+                "share_of_category": _safe_share(float(row.revenue), total_revenue),
+                "transactions": int(row.transactions),
+                "units": int(row.units),
+            }
+            for subcategory, row in top_rows.iterrows()
+        ]
+
+        other_revenue = float(subcategory_grouped.iloc[top_subcategories:]["revenue"].sum()) if len(subcategory_grouped) > top_subcategories else 0.0
+        other_transactions = int(subcategory_grouped.iloc[top_subcategories:]["transactions"].sum()) if len(subcategory_grouped) > top_subcategories else 0
+        other_units = int(subcategory_grouped.iloc[top_subcategories:]["units"].sum()) if len(subcategory_grouped) > top_subcategories else 0
+        if other_revenue > 0:
+            slices.append(
+                {
+                    "subcategory": "Other",
+                    "revenue": round(other_revenue, 2),
+                    "share_of_category": _safe_share(other_revenue, total_revenue),
+                    "transactions": other_transactions,
+                    "units": other_units,
+                }
+            )
+
+        lead = slices[0]
+        payload.append(
+            {
+                "category": category_name,
+                "total_revenue": round(total_revenue, 2),
+                "share_of_total": _safe_share(total_revenue, float(frame["LineTotal"].sum())),
+                "subcategory_count": int(subcategory_grouped.shape[0]),
+                "lead_subcategory": str(lead["subcategory"]),
+                "lead_share_of_category": float(lead["share_of_category"]),
+                "subcategories": slices,
+            }
+        )
+
+    return payload
+
+
+def category_product_bridge(
+    frame: pd.DataFrame,
+    top_categories: int = 5,
+    top_products: int = 8,
+    global_product_cutoff: int = 15,
+) -> list[dict[str, object]]:
+    categories = category_rankings(frame)[:top_categories]
+    global_products = product_rankings(frame)
+    global_rank_lookup = {str(item["name"]): index + 1 for index, item in enumerate(global_products)}
+    global_top_products = {
+        str(item["name"])
+        for index, item in enumerate(global_products)
+        if index < global_product_cutoff
+    }
+    total_revenue = float(frame["LineTotal"].sum())
+    payload: list[dict[str, object]] = []
+
+    for category_item in categories:
+        category_name = str(category_item["name"])
+        category_frame = frame[frame["Category"] == category_name]
+        category_revenue = float(category_frame["LineTotal"].sum())
+        if category_frame.empty or category_revenue == 0:
+            continue
+
+        product_grouped = (
+            category_frame.groupby(["Product", "Subcategory"])
+            .agg(revenue=("LineTotal", "sum"), transactions=("Transaction", "count"), units=("RQty", "sum"))
+            .sort_values("revenue", ascending=False)
+        )
+        top_rows = product_grouped.head(top_products)
+        driver_rows = []
+        for product, subcategory in top_rows.index:
+            row = top_rows.loc[(product, subcategory)]
+            driver_rows.append(
+                {
+                    "product": str(product),
+                    "subcategory": str(subcategory),
+                    "revenue": round(float(row.revenue), 2),
+                    "share_of_category": _safe_share(float(row.revenue), category_revenue),
+                    "share_of_total": _safe_share(float(row.revenue), total_revenue),
+                    "transactions": int(row.transactions),
+                    "units": int(row.units),
+                    "global_product_rank": int(global_rank_lookup.get(str(product), 0)),
+                }
+            )
+
+        lead = driver_rows[0] if driver_rows else None
+        payload.append(
+            {
+                "category": category_name,
+                "total_revenue": round(category_revenue, 2),
+                "share_of_total": _safe_share(category_revenue, total_revenue),
+                "product_count": int(product_grouped.shape[0]),
+                "top_product": str(lead["product"]) if lead else "N/A",
+                "top_product_revenue": float(lead["revenue"]) if lead else 0.0,
+                "top_product_share_of_category": float(lead["share_of_category"]) if lead else 0.0,
+                "products_in_global_top": int(
+                    sum(1 for product, _subcategory in product_grouped.index if str(product) in global_top_products),
+                ),
+                "drivers": driver_rows,
+            }
+        )
+
+    return payload
+
+
+def product_hierarchy_matrix(
+    frame: pd.DataFrame,
+    top_categories: int = 5,
+    top_products_per_category: int = 8,
+) -> list[dict[str, float | int | str]]:
+    categories = [str(item["name"]) for item in category_rankings(frame)[:top_categories]]
+    payload: list[dict[str, float | int | str]] = []
+
+    for category_name in categories:
+        category_frame = frame[frame["Category"] == category_name]
+        category_revenue = float(category_frame["LineTotal"].sum())
+        if category_frame.empty or category_revenue == 0:
+            continue
+
+        grouped = (
+            category_frame.groupby(["Subcategory", "Product"])
+            .agg(revenue=("LineTotal", "sum"), transactions=("Transaction", "count"), units=("RQty", "sum"))
+            .sort_values("revenue", ascending=False)
+        )
+
+        for rank, ((subcategory, product), row) in enumerate(grouped.head(top_products_per_category).iterrows(), start=1):
+            payload.append(
+                {
+                    "category": category_name,
+                    "subcategory": str(subcategory),
+                    "product": str(product),
+                    "revenue": round(float(row.revenue), 2),
+                    "transactions": int(row.transactions),
+                    "units": int(row.units),
+                    "share_of_category": _safe_share(float(row.revenue), category_revenue),
+                    "rank_within_category": rank,
+                }
+            )
+
+    return payload
 
 
 def _location_metrics(frame: pd.DataFrame) -> list[dict[str, float | int | str]]:

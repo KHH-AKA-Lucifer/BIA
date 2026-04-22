@@ -106,6 +106,58 @@ class ProductRankingResponse(BaseModel):
     units: int
 
 
+class CategorySubcategorySliceResponse(BaseModel):
+    subcategory: str
+    revenue: float
+    share_of_category: float
+    transactions: int
+    units: int
+
+
+class CategorySubcategoryContributionResponse(BaseModel):
+    category: str
+    total_revenue: float
+    share_of_total: float
+    subcategory_count: int
+    lead_subcategory: str
+    lead_share_of_category: float
+    subcategories: list[CategorySubcategorySliceResponse]
+
+
+class CategoryProductDriverResponse(BaseModel):
+    product: str
+    subcategory: str
+    revenue: float
+    share_of_category: float
+    share_of_total: float
+    transactions: int
+    units: int
+    global_product_rank: int
+
+
+class CategoryProductBridgeResponse(BaseModel):
+    category: str
+    total_revenue: float
+    share_of_total: float
+    product_count: int
+    top_product: str
+    top_product_revenue: float
+    top_product_share_of_category: float
+    products_in_global_top: int
+    drivers: list[CategoryProductDriverResponse]
+
+
+class ProductHierarchyRowResponse(BaseModel):
+    category: str
+    subcategory: str
+    product: str
+    revenue: float
+    transactions: int
+    units: int
+    share_of_category: float
+    rank_within_category: int
+
+
 class MachineRankingResponse(BaseModel):
     machine_id: str
     location: str
@@ -175,6 +227,9 @@ class DashboardSummaryResponse(BaseModel):
     category_rankings: list[CategoryRankingResponse]
     subcategory_rankings: list[SubcategoryRankingResponse]
     product_rankings: list[ProductRankingResponse]
+    category_subcategory_contribution: list[CategorySubcategoryContributionResponse]
+    category_product_bridge: list[CategoryProductBridgeResponse]
+    product_hierarchy_matrix: list[ProductHierarchyRowResponse]
     machine_rankings: list[MachineRankingResponse]
     category_location_matrix: list[CategoryLocationRowResponse]
     restock_priority: list[RestockPriorityResponse]

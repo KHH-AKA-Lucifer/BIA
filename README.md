@@ -289,7 +289,28 @@ The generator now creates:
 
 ## 🚀 Running the Project
 
-### Option 1: Manual Start (Recommended for Development)
+### Option 1: One Command Start
+
+From the project root:
+
+```bash
+./project run
+```
+
+This starts:
+- PostgreSQL via Docker Compose
+- FastAPI backend on `http://127.0.0.1:8000`
+- Vite frontend on `http://127.0.0.1:3000`
+
+Useful companion commands:
+
+```bash
+./project status
+./project logs
+./project stop
+```
+
+### Option 2: Manual Start
 
 #### Terminal 1 - Start Backend API
 
@@ -318,7 +339,7 @@ Frontend will be available at: `http://localhost:3000`
 Open your browser and navigate to:
 `http://localhost:3000`
 
-### Option 2: Docker Compose (Database only)
+### Option 3: Docker Compose (Database only)
 
 ```bash
 # Start PostgreSQL only

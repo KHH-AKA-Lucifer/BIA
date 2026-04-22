@@ -100,6 +100,27 @@ def _infer_period(message: str, default_period: str) -> str:
     return default_period
 
 
+def _is_forecast_request(message: str) -> bool:
+    lowered = _normalize(message)
+    forecast_tokens = (
+        "forecast",
+        "predict",
+        "prediction",
+        "expected",
+        "estimate",
+        "projected",
+        "tomorrow",
+        "next day",
+        "next week",
+        "next 7",
+        "expected sales",
+        "expected revenue",
+        "sales tomorrow",
+        "revenue tomorrow",
+    )
+    return any(token in lowered for token in forecast_tokens)
+
+
 def _resolve_time_window(message: str, default_period: str) -> tuple[pd.DataFrame, str, str]:
     lowered = _normalize(message)
     available_end = databoard_service.available_range()[1]
@@ -132,6 +153,126 @@ def _resolve_time_window(message: str, default_period: str) -> tuple[pd.DataFram
     effective_period = _infer_period(message, default_period)
     frame = databoard_service.filtered_dataframe(effective_period)  # type: ignore[arg-type]
     return frame, f"period={effective_period}", effective_period
+
+
+def _time_grain(message: str, scope_key: str, period: str) -> str:
+    lowered = _normalize(message)
+    if scope_key.endswith("_hours") or any(token in lowered for token in ("hour", "hourly", "hrs", "hr ")):
+        return "hour"
+    if scope_key in {"today", "current_snapshot"}:
+        return "hour"
+    if scope_key in {"period=year", "last_365_days"} or period == "year":
+        return "month"
+    if scope_key in {"period=quarter", "last_90_days"} or period == "quarter":
+        return "week"
+    return "day"
+
+
+def _relevant_columns(topics: set[str], entity_kind: str | None) -> list[str]:
+    columns = ["TransDate", "LineTotal", "RQty", "Transaction"]
+    if entity_kind == "location" or "location" in topics:
+        columns.append("Location")
+    if entity_kind == "category" or "category" in topics:
+        columns.append("Category")
+    if entity_kind == "subcategory" or "category" in topics:
+        columns.append("Subcategory")
+    if entity_kind == "product" or "product" in topics:
+        columns.append("Product")
+    if entity_kind == "machine" or "machine" in topics:
+        columns.extend(["Device ID", "Location"])
+    if "payment" in topics:
+        columns.append("Payment Type")
+    deduped: list[str] = []
+    for column in columns:
+        if column not in deduped:
+            deduped.append(column)
+    return deduped
+
+
+def _preview_rows(frame: pd.DataFrame, columns: list[str], limit: int = 6) -> list[dict[str, object]]:
+    visible_columns = [column for column in columns if column in frame.columns]
+    if not visible_columns or frame.empty:
+        return []
+
+    preview = frame[visible_columns].sort_values("TransDate", ascending=False).head(limit).copy()
+    for column in preview.columns:
+        if pd.api.types.is_datetime64_any_dtype(preview[column]):
+            preview[column] = preview[column].dt.strftime("%Y-%m-%d %H:%M")
+    preview = preview.where(pd.notnull(preview), None)
+    return preview.to_dict(orient="records")
+
+
+def _matched_entities(message: str) -> dict[str, list[str]]:
+    candidates = _entity_candidates()
+    matches = {
+        entity_type: _extract_matches(message, values)
+        for entity_type, values in candidates.items()
+    }
+    return {key: values for key, values in matches.items() if values}
+
+
+def _build_entity_details(frame: pd.DataFrame, matched_entities: dict[str, list[str]], period: str) -> dict[str, object]:
+    entity_details: dict[str, object] = {}
+    for location in matched_entities.get("location", []):
+        detail = _location_detail(frame, location, period)
+        if detail is not None:
+            entity_details[f"location:{location}"] = detail
+    for category in matched_entities.get("category", []):
+        detail = _category_detail(frame, category, period)
+        if detail is not None:
+            entity_details[f"category:{category}"] = detail
+    for subcategory in matched_entities.get("subcategory", []):
+        detail = _subcategory_detail(frame, subcategory, period)
+        if detail is not None:
+            entity_details[f"subcategory:{subcategory}"] = detail
+    for product in matched_entities.get("product", []):
+        detail = _product_detail(frame, product, period)
+        if detail is not None:
+            entity_details[f"product:{product}"] = detail
+    for machine in matched_entities.get("machine", []):
+        detail = _machine_detail(frame, machine, period)
+        if detail is not None:
+            entity_details[f"machine:{machine}"] = detail
+    return entity_details
+
+
+def _finalize_response(
+    response: dict[str, Any],
+    *,
+    message: str,
+    requested_period: str,
+    effective_period: str,
+    frame: pd.DataFrame,
+    scope_key: str,
+    scope_label: str,
+    route_strategy: str,
+    entity_kind: str | None = None,
+) -> dict[str, Any]:
+    topics = _request_topics(message)
+    matched_entities = _matched_entities(message)
+    columns = _relevant_columns(topics, entity_kind)
+    start = frame["TransDate"].min().strftime("%Y-%m-%d %H:%M") if not frame.empty else ""
+    end = frame["TransDate"].max().strftime("%Y-%m-%d %H:%M") if not frame.empty else ""
+    response["request_context"] = {
+        "requested_period": requested_period,
+        "resolved_period": effective_period,
+        "resolved_scope": scope_key,
+        "scope_label": scope_label,
+        "time_grain": _time_grain(message, scope_key, effective_period),
+        "start": start,
+        "end": end,
+        "row_count": int(len(frame)),
+        "topics": sorted(topics),
+        "matched_entities": matched_entities,
+        "columns": [column for column in columns if column in frame.columns],
+        "route_strategy": route_strategy,
+    }
+    response["evidence"] = {
+        "preview_rows": _preview_rows(frame, columns),
+        "matched_entity_details": _build_entity_details(frame, matched_entities, effective_period),
+        "answer_payload": response.get("structured_data"),
+    }
+    return response
 
 
 def _summary_context(period: str) -> dict[str, object]:
@@ -479,70 +620,81 @@ def _build_llm_context(message: str, period: str) -> dict[str, object]:
     return context
 
 
-def _forecast_route(message: str) -> dict[str, Any]:
+def _forecast_route(message: str, period: str) -> dict[str, Any]:
+    frame, scope_key, scope_label = _resolve_time_window(message, period)
+    effective_period = _infer_period(message, period)
     candidates = _entity_candidates()
-    horizon = 7 if any(token in _normalize(message) for token in ("7 day", "7-day", "week", "next 7")) else 1
+    lowered = _normalize(message)
+    horizon = 7 if any(token in lowered for token in ("7 day", "7-day", "week", "next 7")) else 1
+
+    metric_label = "sales" if "sales" in lowered else "demand" if "demand" in lowered else "revenue"
+    metric_answer_suffix = (
+        " as a revenue forecast proxy for demand"
+        if metric_label == "demand"
+        else f" in {metric_label}"
+    )
 
     machine = _extract_best_match(message, candidates["machine"])
     if machine:
         payload = forecast_entity("machine", machine, horizon_days=horizon)
-        return {
+        return _finalize_response({
             "mode": "local_model",
             "route": "forecast_machine",
-            "answer": f"The trained machine revenue forecaster predicts {machine} will generate {payload['next_7d_revenue'] if horizon > 1 else payload['next_day_revenue']:.2f} USD over the requested horizon.",
+            "answer": f"The trained machine forecaster expects {machine} to generate {payload['next_7d_revenue'] if horizon > 1 else payload['next_day_revenue']:.2f} USD{metric_answer_suffix} over the requested horizon.",
             "model_name": payload["model_name"],
             "model_type": payload["model_type"],
             "confidence": f"MAE {payload['metrics']['mae']} | RMSE {payload['metrics']['rmse']}",
             "data_scope": f"machine={machine}",
             "chart_hint": "line",
             "structured_data": payload,
-        }
+        }, message=message, requested_period=period, effective_period=effective_period, frame=frame, scope_key=scope_key, scope_label=scope_label, route_strategy="trained_model", entity_kind="machine")
 
     location = _extract_best_match(message, candidates["location"])
     if location:
         payload = forecast_entity("location", location, horizon_days=horizon)
-        return {
+        return _finalize_response({
             "mode": "local_model",
             "route": "forecast_location",
-            "answer": f"The trained location forecaster predicts {location} will generate {payload['next_7d_revenue'] if horizon > 1 else payload['next_day_revenue']:.2f} USD over the requested horizon.",
+            "answer": f"The trained location forecaster expects {location} to generate {payload['next_7d_revenue'] if horizon > 1 else payload['next_day_revenue']:.2f} USD{metric_answer_suffix} over the requested horizon.",
             "model_name": payload["model_name"],
             "model_type": payload["model_type"],
             "confidence": f"MAE {payload['metrics']['mae']} | RMSE {payload['metrics']['rmse']}",
             "data_scope": f"location={location}",
             "chart_hint": "line",
             "structured_data": payload,
-        }
+        }, message=message, requested_period=period, effective_period=effective_period, frame=frame, scope_key=scope_key, scope_label=scope_label, route_strategy="trained_model", entity_kind="location")
 
     category = _extract_best_match(message, candidates["category"])
     if category:
         payload = forecast_entity("category", category, horizon_days=horizon)
-        return {
+        return _finalize_response({
             "mode": "local_model",
             "route": "forecast_category",
-            "answer": f"The trained category forecaster predicts {category} will generate {payload['next_7d_revenue'] if horizon > 1 else payload['next_day_revenue']:.2f} USD over the requested horizon.",
+            "answer": f"The trained category forecaster expects {category} to generate {payload['next_7d_revenue'] if horizon > 1 else payload['next_day_revenue']:.2f} USD{metric_answer_suffix} over the requested horizon.",
             "model_name": payload["model_name"],
             "model_type": payload["model_type"],
             "confidence": f"MAE {payload['metrics']['mae']} | RMSE {payload['metrics']['rmse']}",
             "data_scope": f"category={category}",
             "chart_hint": "line",
             "structured_data": payload,
-        }
+        }, message=message, requested_period=period, effective_period=effective_period, frame=frame, scope_key=scope_key, scope_label=scope_label, route_strategy="trained_model", entity_kind="category")
 
     payload = forecast_entity("network", horizon_days=horizon)
-    return {
+    return _finalize_response({
         "mode": "local_model",
         "route": "forecast_network",
-        "answer": f"The trained network forecaster predicts {payload['next_7d_revenue'] if horizon > 1 else payload['next_day_revenue']:.2f} USD over the requested horizon.",
+        "answer": f"The trained network forecaster expects {payload['next_7d_revenue'] if horizon > 1 else payload['next_day_revenue']:.2f} USD{metric_answer_suffix} over the requested horizon.",
         "model_name": payload["model_name"],
         "model_type": payload["model_type"],
         "confidence": f"MAE {payload['metrics']['mae']} | RMSE {payload['metrics']['rmse']}",
         "data_scope": "network",
         "chart_hint": "line",
         "structured_data": payload,
-    }
+    }, message=message, requested_period=period, effective_period=effective_period, frame=frame, scope_key=scope_key, scope_label=scope_label, route_strategy="trained_model")
 
 
-def _risk_route(message: str) -> dict[str, Any]:
+def _risk_route(message: str, period: str) -> dict[str, Any]:
+    frame, scope_key, scope_label = _resolve_time_window(message, period)
     machine = _extract_best_match(message, _entity_candidates()["machine"])
     payload = predict_machine_risk(machine_id=machine, top_n=8 if machine is None else 1)
     predictions = payload["predictions"]
@@ -563,7 +715,7 @@ def _risk_route(message: str) -> dict[str, Any]:
         )
         scope = "fleet_top_risk"
 
-    return {
+    return _finalize_response({
         "mode": "local_model",
         "route": "risk_classification",
         "answer": answer,
@@ -577,13 +729,14 @@ def _risk_route(message: str) -> dict[str, Any]:
         "data_scope": scope,
         "chart_hint": "bar",
         "structured_data": payload,
-    }
+    }, message=message, requested_period=period, effective_period=_infer_period(message, period), frame=frame, scope_key=scope_key, scope_label=scope_label, route_strategy="trained_model", entity_kind="machine")
 
 
-def _cluster_route() -> dict[str, Any]:
+def _cluster_route(message: str, period: str) -> dict[str, Any]:
+    frame, scope_key, scope_label = _resolve_time_window(message, period)
     payload = get_location_segments()
     first_segment = payload["segments"][0]
-    return {
+    return _finalize_response({
         "mode": "local_model",
         "route": "location_clustering",
         "answer": (
@@ -596,11 +749,77 @@ def _cluster_route() -> dict[str, Any]:
         "data_scope": "location_segments",
         "chart_hint": "table",
         "structured_data": payload,
-    }
+    }, message=message, requested_period=period, effective_period=_infer_period(message, period), frame=frame, scope_key=scope_key, scope_label=scope_label, route_strategy="trained_model", entity_kind="location")
+
+
+def _predictive_ranking_route(message: str, period: str) -> dict[str, Any] | None:
+    lowered = _normalize(message)
+    entity_kind = _infer_entity_kind(message)
+    if entity_kind not in {"category", "location", "machine"}:
+        return None
+    if not any(token in lowered for token in ("will", "next", "tomorrow", "future", "forecast", "predict", "expected", "projected")):
+        return None
+    if not any(token in lowered for token in ("best", "top", "highest", "will do best", "will perform best", "strongest")):
+        return None
+
+    horizon = 7 if any(token in lowered for token in ("7 day", "7-day", "week", "next 7", "next week")) else 1
+    scope_map = {"category": "category", "location": "location", "machine": "machine"}
+    candidate_map = _entity_candidates()
+    candidates = candidate_map[entity_kind]
+    predictions: list[dict[str, Any]] = []
+    for candidate in candidates:
+        try:
+            payload = forecast_entity(scope_map[entity_kind], candidate, horizon_days=horizon)
+        except Exception:
+            continue
+        predictions.append(
+            {
+                "name": candidate,
+                "next_day_revenue": float(payload["next_day_revenue"]),
+                "next_7d_revenue": float(payload["next_7d_revenue"]),
+            }
+        )
+
+    if not predictions:
+        return None
+
+    target_key = "next_7d_revenue" if horizon > 1 else "next_day_revenue"
+    ranked = sorted(predictions, key=lambda item: item[target_key], reverse=True)
+    top = ranked[0]
+    frame, scope_key, scope_label = _resolve_time_window(message, period)
+    effective_period = _infer_period(message, period)
+    noun = {"category": "category", "location": "location", "machine": "machine"}[entity_kind]
+    horizon_label = "next 7 days" if horizon > 1 else "tomorrow"
+    return _finalize_response(
+        {
+            "mode": "local_model",
+            "route": f"forecast_best_{entity_kind}",
+            "answer": f"The trained {noun} forecaster expects {top['name']} to perform best for {horizon_label}, with a forecast of {top[target_key]:.2f} USD.",
+            "model_name": f"{noun.title()} comparative forecast",
+            "model_type": "forecast ranking",
+            "confidence": None,
+            "data_scope": scope_key,
+            "chart_hint": "bar",
+            "structured_data": {
+                "entity_kind": entity_kind,
+                "horizon_days": horizon,
+                "ranked_predictions": ranked[:8],
+            },
+        },
+        message=message,
+        requested_period=period,
+        effective_period=effective_period,
+        frame=frame,
+        scope_key=scope_key,
+        scope_label=scope_label,
+        route_strategy="trained_model",
+        entity_kind=entity_kind,
+    )
 
 
 def _analytics_route(message: str, period: str) -> dict[str, Any] | None:
     frame, scope_key, scope_label = _resolve_time_window(message, period)
+    effective_period = _infer_period(message, period)
     lowered = _normalize(message)
     entity_kind = _infer_entity_kind(message)
     metric, metric_label = _infer_metric(message, entity_kind)
@@ -611,10 +830,11 @@ def _analytics_route(message: str, period: str) -> dict[str, Any] | None:
         if grouped.empty:
             return None
         summary = _summarize_ranked_rows(grouped, metric)
-        return {
+        ranking_label = "bottom" if ascending else "top"
+        return _finalize_response({
             "mode": "local_analytics",
             "route": f"compare_{entity_kind}_rankings",
-            "answer": f"The top {entity_kind} rankings in {scope_label} are: {summary}.",
+            "answer": f"The {ranking_label} {entity_kind} rankings in {scope_label} are: {summary}.",
             "model_name": None,
             "model_type": "descriptive analytics",
             "confidence": None,
@@ -631,7 +851,7 @@ def _analytics_route(message: str, period: str) -> dict[str, Any] | None:
                 }
                 for entity_name, row in grouped.head(5).iterrows()
             ],
-        }
+        }, message=message, requested_period=period, effective_period=effective_period, frame=frame, scope_key=scope_key, scope_label=scope_label, route_strategy="deterministic_analytics", entity_kind=entity_kind)
 
     if entity_kind in ENTITY_COLUMN_MAP and any(
         token in lowered
@@ -666,7 +886,7 @@ def _analytics_route(message: str, period: str) -> dict[str, Any] | None:
         }[entity_kind]
         metric_value = int(row["metric_value"]) if metric == "units" else round(float(row["metric_value"]), 2)
         metric_phrase = f"{metric_value} units sold" if metric == "units" else f"{metric_value:.2f} USD in revenue" if metric == "revenue" else f"{int(row['metric_value'])} transactions"
-        return {
+        return _finalize_response({
             "mode": "local_analytics",
             "route": f"{direction_label}_{metric_label}_{entity_kind}",
             "answer": f"The {direction_label} {metric_label} {noun} in {scope_label} is {entity_name} with {metric_phrase}.",
@@ -683,7 +903,7 @@ def _analytics_route(message: str, period: str) -> dict[str, Any] | None:
                 "units": int(row["units"]),
                 "transactions": int(row["transactions"]),
             },
-        }
+        }, message=message, requested_period=period, effective_period=effective_period, frame=frame, scope_key=scope_key, scope_label=scope_label, route_strategy="deterministic_analytics", entity_kind=entity_kind)
 
     if any(token in lowered for token in ("best selling product", "best-selling product", "top selling product", "top-selling product", "most sold product", "highest selling product")):
         grouped = (
@@ -695,7 +915,7 @@ def _analytics_route(message: str, period: str) -> dict[str, Any] | None:
             return None
         product_name = str(grouped.index[0])
         row = grouped.iloc[0]
-        return {
+        return _finalize_response({
             "mode": "local_analytics",
             "route": "best_selling_product",
             "answer": (
@@ -713,11 +933,11 @@ def _analytics_route(message: str, period: str) -> dict[str, Any] | None:
                 "revenue": round(float(row["revenue"]), 2),
                 "transactions": int(row["transactions"]),
             },
-        }
+        }, message=message, requested_period=period, effective_period=effective_period, frame=frame, scope_key=scope_key, scope_label=scope_label, route_strategy="deterministic_analytics", entity_kind="product")
 
     if any(token in lowered for token in ("top location", "highest profit place", "best location", "most profitable location")):
         top = databoard_service.location_rankings(frame)[0]
-        return {
+        return _finalize_response({
             "mode": "local_analytics",
             "route": "top_location",
             "answer": f"The highest-profit location in the selected period is {top['name']} with revenue of {top['revenue']:.2f} USD.",
@@ -727,10 +947,10 @@ def _analytics_route(message: str, period: str) -> dict[str, Any] | None:
             "data_scope": scope_key,
             "chart_hint": "bar",
             "structured_data": top,
-        }
+        }, message=message, requested_period=period, effective_period=effective_period, frame=frame, scope_key=scope_key, scope_label=scope_label, route_strategy="deterministic_analytics", entity_kind="location")
     if any(token in lowered for token in ("top category", "highest profit category", "best category")):
         top = databoard_service.category_rankings(frame)[0]
-        return {
+        return _finalize_response({
             "mode": "local_analytics",
             "route": "top_category",
             "answer": f"The highest-profit category in the selected period is {top['name']} with revenue of {top['revenue']:.2f} USD.",
@@ -740,10 +960,10 @@ def _analytics_route(message: str, period: str) -> dict[str, Any] | None:
             "data_scope": scope_key,
             "chart_hint": "bar",
             "structured_data": top,
-        }
+        }, message=message, requested_period=period, effective_period=effective_period, frame=frame, scope_key=scope_key, scope_label=scope_label, route_strategy="deterministic_analytics", entity_kind="category")
     if any(token in lowered for token in ("top product", "highest profit product", "best product")):
         top = databoard_service.product_rankings(frame)[0]
-        return {
+        return _finalize_response({
             "mode": "local_analytics",
             "route": "top_product",
             "answer": f"The highest-profit product in the selected period is {top['name']} with revenue of {top['revenue']:.2f} USD.",
@@ -753,8 +973,274 @@ def _analytics_route(message: str, period: str) -> dict[str, Any] | None:
             "data_scope": scope_key,
             "chart_hint": "bar",
             "structured_data": top,
-        }
+        }, message=message, requested_period=period, effective_period=effective_period, frame=frame, scope_key=scope_key, scope_label=scope_label, route_strategy="deterministic_analytics", entity_kind="product")
     return None
+
+
+def _context_only_route(message: str, period: str) -> dict[str, Any]:
+    frame, scope_key, scope_label = _resolve_time_window(message, period)
+    effective_period = _infer_period(message, period)
+    summary = databoard_service.kpis(frame)
+    structured = {
+        "top_location": summary["top_location"],
+        "top_category": summary["top_category"],
+        "top_product": summary["top_product"],
+    }
+    return _finalize_response(
+        {
+            "mode": "scoped_context",
+            "route": "scoped_context_summary",
+            "answer": (
+                f"I could not match that to a dedicated model route, so I used the exact data slice for {scope_label}. "
+                f"Within that slice, the top location is {summary['top_location']['name']}, the top category is {summary['top_category']['name']}, "
+                f"and the top product is {summary['top_product']['name']}."
+            ),
+            "model_name": None,
+            "model_type": "context summary",
+            "confidence": None,
+            "data_scope": scope_key,
+            "chart_hint": None,
+            "structured_data": structured,
+        },
+        message=message,
+        requested_period=period,
+        effective_period=effective_period,
+        frame=frame,
+        scope_key=scope_key,
+        scope_label=scope_label,
+        route_strategy="scoped_context",
+    )
+
+
+def _weak_products_route(message: str, period: str) -> dict[str, Any]:
+    frame, scope_key, scope_label = _resolve_time_window(message, period)
+    effective_period = _infer_period(message, period)
+    grouped = (
+        frame.groupby(["Product", "Category", "Subcategory"])
+        .agg(revenue=("LineTotal", "sum"), units=("RQty", "sum"), transactions=("Transaction", "count"))
+        .reset_index()
+    )
+    if grouped.empty:
+        raise ValueError("No product data available for this time window.")
+
+    active = grouped[grouped["transactions"] >= max(2, int(grouped["transactions"].quantile(0.25)))]
+    if active.empty:
+        active = grouped
+    weakest = active.sort_values(["revenue", "transactions", "units"], ascending=[True, True, True]).head(5)
+    items = [
+        {
+            "name": str(row.Product),
+            "category": str(row.Category),
+            "subcategory": str(row.Subcategory),
+            "revenue": round(float(row.revenue), 2),
+            "units": int(row.units),
+            "transactions": int(row.transactions),
+        }
+        for row in weakest.itertuples()
+    ]
+    summary = "; ".join(f"{item['name']} (${item['revenue']:.2f}, {item['transactions']} txns)" for item in items[:3])
+    return _finalize_response(
+        {
+            "mode": "local_analytics",
+            "route": "weak_products",
+            "answer": f"The weakest active products in {scope_label} are {summary}. I returned the bottom product list using revenue and transaction volume from the selected slice.",
+            "model_name": None,
+            "model_type": "descriptive analytics",
+            "confidence": None,
+            "data_scope": scope_key,
+            "chart_hint": "table",
+            "structured_data": items,
+        },
+        message=message,
+        requested_period=period,
+        effective_period=effective_period,
+        frame=frame,
+        scope_key=scope_key,
+        scope_label=scope_label,
+        route_strategy="diagnostic_analytics",
+        entity_kind="product",
+    )
+
+
+def _location_diagnosis_route(message: str, period: str) -> dict[str, Any] | None:
+    frame, scope_key, scope_label = _resolve_time_window(message, period)
+    effective_period = _infer_period(message, period)
+    location = _extract_best_match(message, _entity_candidates()["location"])
+    if not location:
+        return None
+
+    location_metrics = databoard_service.location_map(frame)
+    location_item = next((item for item in location_metrics if item["name"] == location), None)
+    if location_item is None:
+        return None
+
+    detail = _location_detail(frame, location, effective_period)
+    if detail is None:
+        return None
+
+    network_revenue_avg = float(sum(float(item["revenue"]) for item in location_metrics) / max(len(location_metrics), 1))
+    network_txn_avg = float(sum(float(item["transactions"]) for item in location_metrics) / max(len(location_metrics), 1))
+    network_avg_ticket = float(frame["LineTotal"].sum() / max(frame["Transaction"].count(), 1))
+    revenue_gap = round(float(location_item["revenue"]) - network_revenue_avg, 2)
+    txn_gap = round(float(location_item["transactions"]) - network_txn_avg, 2)
+    avg_ticket = round(float(location_item["average_ticket"]), 2)
+    avg_ticket_gap = round(avg_ticket - network_avg_ticket, 2)
+    top_category = detail["top_categories"][0]["name"] if detail["top_categories"] else "N/A"
+    top_category_share = 0.0
+    if detail["revenue"]:
+        top_category_share = round(float(detail["top_categories"][0]["revenue"]) / float(detail["revenue"]) * 100, 1) if detail["top_categories"] else 0.0
+    trend_points = detail["trend"]
+    trend_delta = 0.0
+    if len(trend_points) >= 2:
+        earlier = float(trend_points[0]["revenue"])
+        latest = float(trend_points[-1]["revenue"])
+        if earlier > 0:
+            trend_delta = round(((latest - earlier) / earlier) * 100, 1)
+
+    active_days = int(frame[frame["Location"] == location]["DateOnly"].nunique())
+    network_median_active_days = int(frame.groupby("Location")["DateOnly"].nunique().median()) if not frame.empty else 0
+    ranked_locations = sorted(location_metrics, key=lambda item: float(item["revenue"]), reverse=True)
+    revenue_rank = next((idx for idx, item in enumerate(ranked_locations, 1) if item["name"] == location), len(ranked_locations))
+    productivity_rankings = sorted(
+        location_metrics,
+        key=lambda item: float(item["revenue"]) / max(int(item["machine_count"]), 1),
+        reverse=True,
+    )
+    productivity_rank = next((idx for idx, item in enumerate(productivity_rankings, 1) if item["name"] == location), len(productivity_rankings))
+
+    drivers = []
+    if revenue_rank >= max(3, len(ranked_locations) - 2):
+        drivers.append(f"it ranks {revenue_rank} out of {len(ranked_locations)} locations on revenue")
+    if productivity_rank >= max(3, len(productivity_rankings) - 2):
+        drivers.append(f"it ranks {productivity_rank} out of {len(productivity_rankings)} on revenue per machine")
+    if revenue_gap < 0:
+        drivers.append(f"revenue is ${abs(revenue_gap):,.0f} below the network location average")
+    if txn_gap < 0:
+        drivers.append(f"transactions are {abs(int(txn_gap))} below the network location average")
+    if avg_ticket_gap < 0:
+        drivers.append(f"average ticket is ${abs(avg_ticket_gap):.2f} below the network average")
+    if active_days < network_median_active_days:
+        drivers.append(f"the site only sold on {active_days} active days versus a network median of {network_median_active_days}")
+    if top_category_share >= 45:
+        drivers.append(f"demand is concentrated in {top_category} ({top_category_share:.1f}% of location revenue)")
+    else:
+        drivers.append(f"no category is dominant enough to act as a hero driver, with {top_category} contributing only {top_category_share:.1f}% of revenue")
+    if trend_delta < 0:
+        drivers.append(f"recent trend is down {abs(trend_delta):.1f}% across the selected series")
+    if not drivers:
+        drivers.append("the location is not materially weak on the selected metrics, so the issue may be relative ranking rather than a clear structural drop")
+
+    structured = {
+        "location": location,
+        "revenue": round(float(location_item["revenue"]), 2),
+        "transactions": int(location_item["transactions"]),
+        "machine_count": int(location_item["machine_count"]),
+        "network_average_revenue": round(network_revenue_avg, 2),
+        "network_average_transactions": round(network_txn_avg, 2),
+        "network_average_ticket": round(network_avg_ticket, 2),
+        "revenue_gap_vs_average": revenue_gap,
+        "transactions_gap_vs_average": txn_gap,
+        "average_ticket": avg_ticket,
+        "average_ticket_gap_vs_average": avg_ticket_gap,
+        "active_days": active_days,
+        "network_median_active_days": network_median_active_days,
+        "revenue_rank": revenue_rank,
+        "productivity_rank": productivity_rank,
+        "location_count": len(ranked_locations),
+        "trend_delta_pct": trend_delta,
+        "top_category": top_category,
+        "top_category_share": top_category_share,
+        "drivers": drivers,
+    }
+    response = _finalize_response(
+        {
+            "mode": "local_analytics",
+            "route": "location_diagnosis",
+            "answer": (
+                f"{location} is weak in {scope_label} because it ranks {revenue_rank} of {len(ranked_locations)} on revenue and "
+                f"{productivity_rank} of {len(productivity_rankings)} on revenue per machine. "
+                f"It is seeing low traffic ({int(location_item['transactions'])} transactions), a smaller average ticket (${avg_ticket:.2f}), "
+                f"and fewer active selling days ({active_days}) than the network norm."
+            ),
+            "model_name": None,
+            "model_type": "diagnostic analytics",
+            "confidence": None,
+            "data_scope": f"location={location}",
+            "chart_hint": "table",
+            "structured_data": structured,
+        },
+        message=message,
+        requested_period=period,
+        effective_period=effective_period,
+        frame=frame,
+        scope_key=scope_key,
+        scope_label=scope_label,
+        route_strategy="diagnostic_analytics",
+        entity_kind="location",
+    )
+    response["request_context"]["matched_entities"] = {"location": [location]}
+    response["evidence"]["matched_entity_details"] = {f"location:{location}": detail}
+    return response
+
+
+def _new_machine_recommendation_route(message: str, period: str) -> dict[str, Any]:
+    frame, scope_key, scope_label = _resolve_time_window(message, period)
+    effective_period = _infer_period(message, period)
+    locations = pd.DataFrame(databoard_service.location_map(frame))
+    if locations.empty:
+        raise ValueError("No location data available for expansion analysis.")
+
+    locations["revenue_per_machine"] = locations["revenue"] / locations["machine_count"].clip(lower=1)
+    locations["transactions_per_machine"] = locations["transactions"] / locations["machine_count"].clip(lower=1)
+    revenue_max = float(locations["revenue_per_machine"].max() or 1.0)
+    txn_max = float(locations["transactions_per_machine"].max() or 1.0)
+    share_max = float(locations["share"].max() or 1.0)
+    locations["expansion_score"] = (
+        (locations["revenue_per_machine"] / revenue_max) * 0.5
+        + (locations["transactions_per_machine"] / txn_max) * 0.3
+        + (locations["share"] / share_max) * 0.2
+    ) * 100
+    ranked = locations.sort_values(["expansion_score", "revenue_per_machine", "transactions"], ascending=False).head(5)
+    items = [
+        {
+            "name": str(row["name"]),
+            "revenue": round(float(row["revenue"]), 2),
+            "transactions": int(row["transactions"]),
+            "machine_count": int(row["machine_count"]),
+            "revenue_per_machine": round(float(row["revenue_per_machine"]), 2),
+            "transactions_per_machine": round(float(row["transactions_per_machine"]), 2),
+            "share": round(float(row["share"]), 2),
+            "top_category": str(row["top_category"]),
+            "expansion_score": round(float(row["expansion_score"]), 2),
+        }
+        for _, row in ranked.iterrows()
+    ]
+    lead = items[0]
+    answer = (
+        f"The strongest current candidates for additional machines in {scope_label} are led by {lead['name']}. "
+        f"I ranked locations by revenue per machine, transactions per machine, and revenue share to identify sites with the strongest incremental demand signal."
+    )
+    return _finalize_response(
+        {
+            "mode": "local_analytics",
+            "route": "new_machine_recommendation",
+            "answer": answer,
+            "model_name": None,
+            "model_type": "prescriptive analytics",
+            "confidence": None,
+            "data_scope": scope_key,
+            "chart_hint": "table",
+            "structured_data": items,
+        },
+        message=message,
+        requested_period=period,
+        effective_period=effective_period,
+        frame=frame,
+        scope_key=scope_key,
+        scope_label=scope_label,
+        route_strategy="prescriptive_analytics",
+        entity_kind="location",
+    )
 
 
 def answer_chat(message: str, period: str = "month") -> dict[str, Any]:
@@ -762,10 +1248,11 @@ def answer_chat(message: str, period: str = "month") -> dict[str, Any]:
     if not lowered:
         raise ValueError("Message is required")
     effective_period = _infer_period(message, period)
+    context_frame, scope_key, scope_label = _resolve_time_window(message, period)
 
     if any(token in lowered for token in ("model", "registry", "what models", "trained models")):
         registry = get_model_registry()
-        return {
+        return _finalize_response({
             "mode": "local_model",
             "route": "model_registry",
             "answer": f"There are {len(registry)} trained local models available, covering forecasting, classification, and clustering.",
@@ -775,25 +1262,42 @@ def answer_chat(message: str, period: str = "month") -> dict[str, Any]:
             "data_scope": "all_models",
             "chart_hint": "table",
             "structured_data": registry,
-        }
-
-    if any(token in lowered for token in ("forecast", "predict", "prediction", "next day", "next week", "next 7")):
-        return _forecast_route(message)
+        }, message=message, requested_period=period, effective_period=effective_period, frame=context_frame, scope_key=scope_key, scope_label=scope_label, route_strategy="trained_model")
 
     if any(token in lowered for token in ("risk", "at risk", "restock", "service first", "critical machine", "assistance", "attention", "assist", "priority")):
-        return _risk_route(message)
+        return _risk_route(message, period)
+
+    predictive_ranking = _predictive_ranking_route(message, period)
+    if predictive_ranking is not None:
+        return predictive_ranking
+
+    if _is_forecast_request(message):
+        return _forecast_route(message, period)
 
     if any(token in lowered for token in ("cluster", "segment", "group similar locations")):
-        return _cluster_route()
+        return _cluster_route(message, period)
 
-    analytics_answer = _analytics_route(message, effective_period)
+    if any(token in lowered for token in ("doing bad", "performing bad", "performing poorly", "underperforming products", "weak products", "bad products", "poor products")) and any(
+        token in lowered for token in ("product", "products", "item", "items", "sku", "skus")
+    ):
+        return _weak_products_route(message, period)
+
+    if any(token in lowered for token in ("why is", "why are", "why does", "why do")):
+        diagnosis = _location_diagnosis_route(message, period)
+        if diagnosis is not None:
+            return diagnosis
+
+    if any(token in lowered for token in ("where should we add new machines", "where should we add machines", "where to add new machines", "where to add machines", "best places for new machines", "new machine placement", "expand machines", "add more machines")):
+        return _new_machine_recommendation_route(message, period)
+
+    analytics_answer = _analytics_route(message, period)
     if analytics_answer is not None:
         return analytics_answer
 
     fallback_context = _build_llm_context(message, effective_period)
     llm_answer = generate_context_bound_answer(message, fallback_context)
     if llm_answer is not None:
-        return {
+        return _finalize_response({
             "mode": "llm_fallback",
             "route": "llm_context_fallback",
             "answer": llm_answer["answer"],
@@ -803,22 +1307,10 @@ def answer_chat(message: str, period: str = "month") -> dict[str, Any]:
             "data_scope": f"period={effective_period}",
             "chart_hint": None,
             "structured_data": None,
-        }
+        }, message=message, requested_period=period, effective_period=effective_period, frame=context_frame, scope_key=scope_key, scope_label=scope_label, route_strategy="llm_context_fallback")
 
     provider_configured = bool(settings.OPENAI_API_KEY or settings.GROQ_API_KEY)
-    return {
-        "mode": "unavailable" if provider_configured else "unsupported",
-        "route": "llm_unavailable" if provider_configured else "no_route",
-        "answer": (
-            "I could not route that request to a trained local model or deterministic analytics function. "
-            "A fallback LLM provider is configured, but the external call did not complete successfully in this environment."
-            if provider_configured
-            else "I could not route that request to a trained local model or deterministic analytics function, and no fallback LLM provider is configured."
-        ),
-        "model_name": None,
-        "model_type": None,
-        "confidence": None,
-        "data_scope": f"period={effective_period}",
-        "chart_hint": None,
-        "structured_data": None,
-    }
+    context_response = _context_only_route(message, period)
+    if provider_configured:
+        context_response["confidence"] = "External fallback unavailable, using scoped dashboard context"
+    return context_response

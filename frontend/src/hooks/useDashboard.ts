@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { DashboardPeriod, DashboardSummary } from '../types/dashboard.types'
+import { DashboardFilters, DashboardPeriod, DashboardSummary } from '../types/dashboard.types'
 import dashboardService from '../services/dashboard.service'
 
 interface UseDashboardReturn {
@@ -9,7 +9,7 @@ interface UseDashboardReturn {
   refresh: () => Promise<void>
 }
 
-export const useDashboard = (period: DashboardPeriod): UseDashboardReturn => {
+export const useDashboard = (period: DashboardPeriod, filters: DashboardFilters): UseDashboardReturn => {
   const [data, setData] = useState<DashboardSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -18,7 +18,7 @@ export const useDashboard = (period: DashboardPeriod): UseDashboardReturn => {
     try {
       setLoading(true)
       setError(null)
-      const summary = await dashboardService.getSummary(period)
+      const summary = await dashboardService.getSummary(period, filters)
       setData(summary)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch dashboard data')
@@ -29,7 +29,7 @@ export const useDashboard = (period: DashboardPeriod): UseDashboardReturn => {
 
   useEffect(() => {
     fetchData()
-  }, [period])
+  }, [period, JSON.stringify(filters)])
 
   const refresh = async () => {
     await fetchData()
