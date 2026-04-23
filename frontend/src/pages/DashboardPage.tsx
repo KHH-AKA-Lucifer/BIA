@@ -1092,11 +1092,6 @@ const DashboardPage: React.FC = () => {
               <h1 style={{ fontSize: '38px', lineHeight: 1.05, fontWeight: 950, margin: '8px 0', color: '#0F172A' }}>
                 VendoSight Performance Command Center
               </h1>
-              <div style={{ fontSize: '15px', color: '#475569', lineHeight: 1.6 }}>
-                {data
-                  ? `Synthetic U.S.-style vending benchmark data from ${data.available_range.start} to ${data.available_range.end}. Analysis window: ${data.analysis_range.start} to ${data.analysis_range.end}. Operations snapshot: ${data.operational_range.start} to ${data.operational_range.end}.`
-                  : 'Loading dashboard context...'}
-              </div>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
